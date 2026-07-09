@@ -29,6 +29,16 @@ bool IsCodexAppProcessName(const std::wstring& name) {
   return lower == L"codex.exe";
 }
 
+std::wstring NormalizeComparablePath(std::wstring path) {
+  std::replace(path.begin(), path.end(), L'/', L'\\');
+  if (path.rfind(L"\\\\?\\", 0) == 0) {
+    path.erase(0, 4);
+  } else if (path.rfind(L"\\??\\", 0) == 0) {
+    path.erase(0, 4);
+  }
+  return ToLower(path);
+}
+
 std::wstring QueryProcessImagePath(DWORD pid) {
   HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
   if (!process) {
@@ -220,7 +230,7 @@ DWORD FindNewestProcessIdByPath(const std::wstring& process_path, DWORD after_pi
   if (snapshot == INVALID_HANDLE_VALUE) {
     return 0;
   }
-  std::wstring target = ToLower(process_path);
+  std::wstring target = NormalizeComparablePath(process_path);
   DWORD best = 0;
   PROCESSENTRY32W entry{};
   entry.dwSize = sizeof(entry);
@@ -230,7 +240,7 @@ DWORD FindNewestProcessIdByPath(const std::wstring& process_path, DWORD after_pi
         continue;
       }
       std::wstring path = QueryProcessImagePath(entry.th32ProcessID);
-      if (ToLower(path) == target) {
+      if (NormalizeComparablePath(path) == target) {
         best = entry.th32ProcessID;
       }
     } while (Process32NextW(snapshot, &entry));
@@ -245,7 +255,7 @@ bool AnyProcessRunningAtPath(const std::wstring& process_path) {
 
 std::vector<ProcessInfo> EnumerateCodexAppProcesses(const std::wstring& app_dir) {
   std::vector<ProcessInfo> processes;
-  std::wstring normalized_app_dir = ToLower(app_dir);
+  std::wstring normalized_app_dir = NormalizeComparablePath(app_dir);
   if (!normalized_app_dir.empty() && normalized_app_dir.back() != L'\\') {
     normalized_app_dir += L"\\";
   }
@@ -263,7 +273,7 @@ std::vector<ProcessInfo> EnumerateCodexAppProcesses(const std::wstring& app_dir)
         continue;
       }
       std::wstring path = QueryProcessImagePath(entry.th32ProcessID);
-      std::wstring lower_path = ToLower(path);
+      std::wstring lower_path = NormalizeComparablePath(path);
       if (lower_path.rfind(normalized_app_dir, 0) != 0) {
         continue;
       }

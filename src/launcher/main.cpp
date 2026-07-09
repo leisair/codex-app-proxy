@@ -203,14 +203,30 @@ void StartupInjectionSweep(const std::wstring& codex_path,
                            DWORD launched_pid) {
   std::wstring app_dir = GetDirName(codex_path);
   std::set<DWORD> seen;
-  if (launched_pid != 0) {
-    seen.insert(launched_pid);
-  }
 
   Logger::Instance().Info(L"Starting 180s startup injection sweep for " + app_dir);
+  if (launched_pid != 0) {
+    Logger::Instance().Info(L"Startup sweep launched PID hint " +
+                            std::to_wstring(launched_pid));
+  }
+  size_t last_candidate_count = static_cast<size_t>(-1);
   auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(180);
   while (std::chrono::steady_clock::now() < deadline) {
-    for (const auto& process : EnumerateCodexAppProcesses(app_dir)) {
+    auto processes = EnumerateCodexAppProcesses(app_dir);
+    if (processes.size() != last_candidate_count) {
+      last_candidate_count = processes.size();
+      Logger::Instance().Info(L"Startup sweep sees " +
+                              std::to_wstring(processes.size()) +
+                              L" Codex app process candidate(s)");
+      for (const auto& process : processes) {
+        Logger::Instance().Info(L"Startup sweep candidate PID " +
+                                std::to_wstring(process.pid) + L" parent " +
+                                std::to_wstring(process.parent_pid) + L" " +
+                                process.path);
+      }
+    }
+
+    for (const auto& process : processes) {
       if (seen.count(process.pid) != 0) {
         continue;
       }
