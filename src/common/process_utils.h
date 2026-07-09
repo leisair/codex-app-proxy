@@ -27,5 +27,6 @@ DWORD FindNewestProcessIdByName(const std::wstring& process_name, DWORD after_pi
 DWORD FindNewestProcessIdByPath(const std::wstring& process_path, DWORD after_pid = 0);
 bool AnyProcessRunningAtPath(const std::wstring& process_path);
 std::vector<ProcessInfo> EnumerateCodexAppProcesses(const std::wstring& app_dir);
+std::vector<ProcessInfo> EnumerateCodexProcessTree(DWORD root_pid);
 
 }  // namespace codex_proxy

@@ -3,10 +3,12 @@
 #include "common/string_utils.h"
 
 #include <algorithm>
+#include <windows.h>
+#include <appmodel.h>
 #include <filesystem>
+#include <set>
 #include <tlhelp32.h>
 #include <vector>
-#include <windows.h>
 
 namespace codex_proxy {
 namespace {
@@ -82,6 +84,55 @@ std::vector<std::wstring> FindWindowsAppsCodexCandidates() {
   return candidates;
 }
 
+std::vector<std::wstring> FindPackagedCodexCandidates() {
+  std::vector<std::wstring> candidates;
+  UINT32 count = 0;
+  UINT32 buffer_length = 0;
+  LONG rc = GetPackagesByPackageFamily(L"OpenAI.Codex_2p2nqsd0c76g0", &count,
+                                       nullptr, &buffer_length, nullptr);
+  if (rc != ERROR_INSUFFICIENT_BUFFER && rc != ERROR_SUCCESS) {
+    return candidates;
+  }
+  if (count == 0 || buffer_length == 0) {
+    return candidates;
+  }
+
+  std::vector<PWSTR> package_names(count);
+  std::vector<WCHAR> package_buffer(buffer_length);
+  rc = GetPackagesByPackageFamily(L"OpenAI.Codex_2p2nqsd0c76g0", &count,
+                                  package_names.data(), &buffer_length,
+                                  package_buffer.data());
+  if (rc != ERROR_SUCCESS) {
+    return candidates;
+  }
+
+  for (UINT32 i = 0; i < count; ++i) {
+    UINT32 path_length = 0;
+    rc = GetPackagePathByFullName(package_names[i], &path_length, nullptr);
+    if (rc != ERROR_INSUFFICIENT_BUFFER || path_length == 0) {
+      continue;
+    }
+
+    std::wstring package_path(path_length, L'\0');
+    rc = GetPackagePathByFullName(package_names[i], &path_length,
+                                  package_path.data());
+    if (rc != ERROR_SUCCESS) {
+      continue;
+    }
+    if (!package_path.empty() && package_path.back() == L'\0') {
+      package_path.pop_back();
+    }
+
+    std::wstring candidate = package_path + L"\\app\\Codex.exe";
+    if (FileExists(candidate)) {
+      candidates.push_back(candidate);
+    }
+  }
+
+  std::sort(candidates.begin(), candidates.end());
+  return candidates;
+}
+
 }  // namespace
 
 std::wstring GetUserProfileDir() {
@@ -144,6 +195,11 @@ std::wstring FindCodexAppPath() {
     }
   }
 
+  auto packaged_candidates = FindPackagedCodexCandidates();
+  if (!packaged_candidates.empty()) {
+    return packaged_candidates.back();
+  }
+
   auto candidates = FindWindowsAppsCodexCandidates();
   if (!candidates.empty()) {
     return candidates.back();
@@ -201,6 +257,8 @@ bool InjectDllIntoProcess(HANDLE process, const std::wstring& dll_path, std::wst
     }
     return false;
   }
+  // Let the DLL's init thread install hooks before a suspended target resumes.
+  Sleep(750);
   return true;
 }
 
@@ -286,6 +344,61 @@ std::vector<ProcessInfo> EnumerateCodexAppProcesses(const std::wstring& app_dir)
     } while (Process32NextW(snapshot, &entry));
   }
   CloseHandle(snapshot);
+  return processes;
+}
+
+std::vector<ProcessInfo> EnumerateCodexProcessTree(DWORD root_pid) {
+  std::vector<ProcessInfo> processes;
+  if (root_pid == 0) {
+    return processes;
+  }
+
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE) {
+    return processes;
+  }
+
+  std::vector<PROCESSENTRY32W> entries;
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  if (Process32FirstW(snapshot, &entry)) {
+    do {
+      entries.push_back(entry);
+      entry.dwSize = sizeof(entry);
+    } while (Process32NextW(snapshot, &entry));
+  }
+  CloseHandle(snapshot);
+
+  std::set<DWORD> tree;
+  tree.insert(root_pid);
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (const auto& item : entries) {
+      if (tree.count(item.th32ProcessID) != 0) {
+        continue;
+      }
+      if (tree.count(item.th32ParentProcessID) == 0) {
+        continue;
+      }
+      tree.insert(item.th32ProcessID);
+      changed = true;
+    }
+  }
+
+  for (const auto& item : entries) {
+    if (tree.count(item.th32ProcessID) == 0 ||
+        !IsCodexAppProcessName(item.szExeFile)) {
+      continue;
+    }
+    ProcessInfo info;
+    info.pid = item.th32ProcessID;
+    info.parent_pid = item.th32ParentProcessID;
+    info.name = item.szExeFile;
+    info.path = QueryProcessImagePath(item.th32ProcessID);
+    processes.push_back(info);
+  }
+
   return processes;
 }
 

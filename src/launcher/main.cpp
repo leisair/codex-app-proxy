@@ -9,6 +9,7 @@
 #include <shellapi.h>
 #include <string>
 #include <thread>
+#include <vector>
 #include <windows.h>
 
 using namespace codex_proxy;
@@ -68,6 +69,22 @@ std::wstring AppUserModelIdFromCodexPath(const std::wstring& codex_path) {
 }
 
 int InjectProcessByPid(DWORD pid, const std::wstring& dll_path);
+
+void AppendUniqueProcesses(std::vector<ProcessInfo>* target,
+                           const std::vector<ProcessInfo>& source) {
+  if (!target) {
+    return;
+  }
+  std::set<DWORD> existing;
+  for (const auto& process : *target) {
+    existing.insert(process.pid);
+  }
+  for (const auto& process : source) {
+    if (existing.insert(process.pid).second) {
+      target->push_back(process);
+    }
+  }
+}
 
 int AttachExisting(const std::wstring& codex_path, const std::wstring& dll_path) {
   std::wstring app_dir = GetDirName(codex_path);
@@ -213,6 +230,9 @@ void StartupInjectionSweep(const std::wstring& codex_path,
   auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(180);
   while (std::chrono::steady_clock::now() < deadline) {
     auto processes = EnumerateCodexAppProcesses(app_dir);
+    if (launched_pid != 0) {
+      AppendUniqueProcesses(&processes, EnumerateCodexProcessTree(launched_pid));
+    }
     if (processes.size() != last_candidate_count) {
       last_candidate_count = processes.size();
       Logger::Instance().Info(L"Startup sweep sees " +
