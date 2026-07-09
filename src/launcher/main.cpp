@@ -19,6 +19,7 @@ namespace {
 
 struct Args {
   bool attach_existing = false;
+  bool hook_mode = false;
   std::wstring config_path = DefaultConfigPath();
   std::wstring codex_path;
 };
@@ -29,6 +30,9 @@ Args ParseArgs(int argc, wchar_t** argv) {
     std::wstring arg = argv[i];
     if (arg == L"--attach-existing") {
       args.attach_existing = true;
+      args.hook_mode = true;
+    } else if (arg == L"--hook") {
+      args.hook_mode = true;
     } else if (arg == L"--config" && i + 1 < argc) {
       args.config_path = argv[++i];
     } else if (arg == L"--codex" && i + 1 < argc) {
@@ -70,6 +74,100 @@ std::wstring AppUserModelIdFromCodexPath(const std::wstring& codex_path) {
 }
 
 int InjectProcessByPid(DWORD pid, const std::wstring& dll_path);
+
+std::wstring ProxyUrl(const AppConfig& config) {
+  return Utf8ToWide(ProxyTypeToString(config.proxy.type)) + L"://" +
+         Utf8ToWide(config.proxy.host) + L":" +
+         std::to_wstring(config.proxy.port);
+}
+
+std::wstring ChromiumProxyServer(const AppConfig& config) {
+  return ProxyUrl(config);
+}
+
+std::wstring ChromiumBypassList() {
+  return L"<-loopback>;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;"
+         L"172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;"
+         L"172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*";
+}
+
+std::wstring BuildEnvironmentBlockWithProxy(const AppConfig& config) {
+  LPWCH current = GetEnvironmentStringsW();
+  if (!current) {
+    return {};
+  }
+
+  std::vector<std::wstring> entries;
+  for (LPWCH item = current; *item; item += wcslen(item) + 1) {
+    std::wstring entry = item;
+    std::wstring lower = ToLower(entry);
+    if (lower.rfind(L"http_proxy=", 0) == 0 ||
+        lower.rfind(L"https_proxy=", 0) == 0 ||
+        lower.rfind(L"all_proxy=", 0) == 0 ||
+        lower.rfind(L"no_proxy=", 0) == 0) {
+      continue;
+    }
+    entries.push_back(entry);
+  }
+  FreeEnvironmentStringsW(current);
+
+  std::wstring proxy = ProxyUrl(config);
+  entries.push_back(L"HTTP_PROXY=" + proxy);
+  entries.push_back(L"HTTPS_PROXY=" + proxy);
+  entries.push_back(L"ALL_PROXY=" + proxy);
+  entries.push_back(L"http_proxy=" + proxy);
+  entries.push_back(L"https_proxy=" + proxy);
+  entries.push_back(L"all_proxy=" + proxy);
+  entries.push_back(L"NO_PROXY=localhost,127.0.0.1,::1");
+  entries.push_back(L"no_proxy=localhost,127.0.0.1,::1");
+  std::sort(entries.begin(), entries.end(),
+            [](const std::wstring& left, const std::wstring& right) {
+              return ToLower(left) < ToLower(right);
+            });
+
+  std::wstring block;
+  for (const auto& entry : entries) {
+    block += entry;
+    block.push_back(L'\0');
+  }
+  block.push_back(L'\0');
+  return block;
+}
+
+int StartWithAppProxy(const std::wstring& codex_path, const AppConfig& config) {
+  STARTUPINFOW si{};
+  si.cb = sizeof(si);
+  PROCESS_INFORMATION pi{};
+
+  std::wstring proxy_server = ChromiumProxyServer(config);
+  std::wstring bypass = ChromiumBypassList();
+  std::wstring command = L"\"" + codex_path + L"\" " +
+      L"--proxy-server=\"" + proxy_server + L"\" " +
+      L"--proxy-bypass-list=\"" + bypass + L"\" " +
+      L"--disable-quic";
+  std::wstring environment = BuildEnvironmentBlockWithProxy(config);
+
+  Logger::Instance().Info(L"Using Codex path: " + codex_path);
+  Logger::Instance().Info(L"Starting Codex with Chromium proxy " + proxy_server);
+  BOOL created = CreateProcessW(codex_path.c_str(), command.data(), nullptr, nullptr,
+                                FALSE, CREATE_UNICODE_ENVIRONMENT,
+                                environment.empty() ? nullptr : environment.data(),
+                                GetDirName(codex_path).c_str(), &si, &pi);
+  if (!created) {
+    Logger::Instance().Warn(FormatLastError(L"CreateProcessW proxy launch failed",
+                                            GetLastError()));
+    std::wcerr << L"Unable to start Codex with per-app proxy.\n";
+    return 10;
+  }
+
+  Logger::Instance().Info(L"Started Codex with app proxy PID " +
+                          std::to_wstring(pi.dwProcessId));
+  CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
+  std::wcout << L"Codex launched with app proxy. Log: "
+             << Logger::Instance().LogPath() << L"\n";
+  return 0;
+}
 
 void AppendUniqueProcesses(std::vector<ProcessInfo>* target,
                            const std::vector<ProcessInfo>& source) {
@@ -309,16 +407,16 @@ int wmain(int argc, wchar_t** argv) {
     return 1;
   }
 
-  std::wstring dll_path = HookDllPath();
-  if (!FileExists(dll_path)) {
-    std::wcerr << L"Missing codex_proxy_hook.dll next to launcher: " << dll_path << L"\n";
-    return 1;
-  }
-
   std::wstring codex_path = args.codex_path.empty() ? FindCodexAppPath() : args.codex_path;
   if (codex_path.empty() || !FileExists(codex_path)) {
     std::wcerr << L"Unable to locate Codex.exe. Use --codex <path>.\n";
     return 3;
+  }
+
+  std::wstring dll_path = HookDllPath();
+  if (args.hook_mode && !FileExists(dll_path)) {
+    std::wcerr << L"Missing codex_proxy_hook.dll next to launcher: " << dll_path << L"\n";
+    return 1;
   }
 
   if (args.attach_existing) {
@@ -329,6 +427,10 @@ int wmain(int argc, wchar_t** argv) {
     std::wcerr << L"Codex desktop app is already running. Close Codex desktop first, "
                   L"or use --attach-existing for diagnostic attach mode.\n";
     return 2;
+  }
+
+  if (!args.hook_mode) {
+    return StartWithAppProxy(codex_path, config);
   }
 
   Logger::Instance().Info(L"Using Codex path: " + codex_path);

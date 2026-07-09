@@ -1,23 +1,20 @@
 # Codex Proxy Launcher
 
-Windows-only transparent proxy launcher for the Codex desktop app.
+Windows-only per-app proxy launcher for the Codex desktop app.
 
-The launcher starts the Codex Microsoft Store app executable, injects
-`codex_proxy_hook.dll`, performs a short startup sweep to inject Codex child
-processes, and then exits. The DLL hooks the Codex process tree so non-local TCP
-traffic is tunneled through a local HTTP/SOCKS5 proxy such as V2RayN mixed port
-`127.0.0.1:10808`.
+The launcher starts the Codex Microsoft Store app executable with Chromium
+proxy flags and process-local proxy environment variables. It does not change
+the Windows system proxy and does not require TUN mode. The default target is a
+local HTTP/SOCKS mixed proxy such as V2RayN on `127.0.0.1:10808`.
 
 ## Status
 
 This is an early v1 implementation. It is intentionally scoped to Codex:
 
-- Allowed process names are `Codex.exe` and `codex.exe` by default.
+- Default mode does not inject DLLs.
 - No service, no tray process, no auto-start, and no global proxy changes.
 - Localhost and private network destinations are bypassed by default.
-- The launcher only treats the desktop app executable as an already-running
-  app. A standalone terminal `codex.exe` process does not block desktop launch
-  and is not injected unless it is a child of the launched desktop app.
+- `--hook` keeps the older experimental DLL hook path for diagnostics only.
 
 ## Build
 
@@ -41,7 +38,7 @@ Pushing to `main` runs `.github/workflows/windows-build.yml` on
 containing:
 
 - `CodexProxyLauncher.exe`
-- `codex_proxy_hook.dll`
+- `codex_proxy_hook.dll` for optional `--hook` diagnostics
 - `config-web.html`
 - `config.json`
 
@@ -51,6 +48,19 @@ containing:
 2. Run `CodexProxyLauncher.exe`.
 3. If `%USERPROFILE%\.codex-proxy\config.json` does not exist, the launcher
    creates it with safe defaults and continues.
+
+The launcher passes these settings only to the Codex process:
+
+- `--proxy-server=...`
+- `--proxy-bypass-list=...`
+- `--disable-quic`
+- `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and lowercase variants
+
+Legacy hook mode is available for diagnostics:
+
+```powershell
+.\CodexProxyLauncher.exe --hook
+```
 
 Open `resources/config-web.html` locally to import, edit, and export
 `config.json`. The HTML file does not start a local server.
