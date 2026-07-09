@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Proxy Config</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7f9;
+      --fg: #1c2026;
+      --muted: #606875;
+      --line: #d8dde6;
+      --panel: #ffffff;
+      --accent: #0b6bcb;
+      --bad: #b42318;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111418;
+        --fg: #e8ecf1;
+        --muted: #9aa4b2;
+        --line: #2d3440;
+        --panel: #181d24;
+        --accent: #58a6ff;
+        --bad: #ff8a80;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+    }
+    main {
+      width: min(1100px, calc(100vw - 32px));
+      margin: 24px auto;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 18px;
+    }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    h2 { font-size: 15px; margin: 0 0 12px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+    input, select, textarea, button {
+      font: inherit;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      background: transparent;
+      color: var(--fg);
+    }
+    textarea {
+      width: 100%;
+      min-height: 360px;
+      resize: vertical;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 12px;
+    }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .ghost {
+      background: transparent;
+      color: var(--fg);
+      border-color: var(--line);
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .status { color: var(--muted); font-size: 13px; min-height: 20px; }
+    .status.bad { color: var(--bad); }
+    code {
+      display: block;
+      white-space: pre-wrap;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--muted);
+      overflow: auto;
+    }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; }
+      .grid, .checks { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <h1>Codex Proxy Config</h1>
+      <section>
+        <h2>代理</h2>
+        <div class="grid">
+          <label>协议
+            <select id="proxyType">
+              <option value="http">HTTP / mixed</option>
+              <option value="socks5">SOCKS5</option>
+            </select>
+          </label>
+          <label>地址
+            <input id="proxyHost" value="127.0.0.1">
+          </label>
+          <label>端口
+            <input id="proxyPort" type="number" min="1" max="65535" value="10808">
+          </label>
+        </div>
+        <p class="status">V2RayN mixed 端口通常可直接使用 HTTP / mixed + 127.0.0.1:10808。</p>
+      </section>
+
+      <section>
+        <h2>注入与目标进程</h2>
+        <div class="checks">
+          <label><input id="childInjection" type="checkbox" checked> 注入 Codex 子进程</label>
+          <label><input id="fakeIp" type="checkbox"> 启用 FakeIP 远程 DNS</label>
+        </div>
+        <label style="margin-top:12px;">目标进程 allowlist，逗号分隔
+          <input id="targets" value="Codex.exe,codex.exe">
+        </label>
+      </section>
+
+      <section>
+        <h2>路由策略</h2>
+        <div class="grid">
+          <label>DNS
+            <select id="dnsMode">
+              <option value="proxy">proxy</option>
+              <option value="direct">direct</option>
+            </select>
+          </label>
+          <label>IPv6
+            <select id="ipv6Mode">
+              <option value="block">block</option>
+              <option value="direct">direct</option>
+              <option value="proxy">proxy</option>
+            </select>
+          </label>
+          <label>UDP
+            <select id="udpMode">
+              <option value="block">block</option>
+              <option value="direct">direct</option>
+            </select>
+          </label>
+        </div>
+        <div class="checks" style="margin-top:12px;">
+          <label><input id="bypassLocalhost" type="checkbox" checked> bypass localhost</label>
+          <label><input id="bypassPrivate" type="checkbox" checked> bypass private networks</label>
+          <label><input id="bypassProxy" type="checkbox" checked> bypass proxy endpoint</label>
+        </div>
+      </section>
+
+      <section>
+        <h2>操作</h2>
+        <div class="row">
+          <button id="preset">V2RayN 10808 预设</button>
+          <button id="download">导出 config.json</button>
+          <button class="ghost" id="copy">复制 JSON</button>
+          <label class="ghost" style="display:inline-flex;align-items:center;gap:8px;">
+            导入 JSON <input id="importFile" type="file" accept="application/json,.json" hidden>
+          </label>
+        </div>
+        <p id="status" class="status"></p>
+      </section>
+
+      <section>
+        <h2>验证命令</h2>
+        <code>$ids = Get-Process | Where-Object { $_.ProcessName -match '^Codex$|^codex$' } | Select-Object -ExpandProperty Id
+Get-NetTCPConnection -OwningProcess $ids -ErrorAction SilentlyContinue |
+  Select-Object OwningProcess,LocalAddress,LocalPort,RemoteAddress,RemotePort,State |
+  Sort-Object OwningProcess,RemoteAddress</code>
+      </section>
+    </div>
+
+    <section>
+      <h2>config.json</h2>
+      <textarea id="json" spellcheck="false"></textarea>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function splitTargets(value) {
+      return value.split(',').map(v => v.trim()).filter(Boolean);
+    }
+
+    function buildConfig() {
+      return {
+        _comment: 'Codex Proxy Launcher configuration',
+        _version: 1,
+        log_level: 'info',
+        proxy: {
+          type: $('proxyType').value,
+          host: $('proxyHost').value.trim() || '127.0.0.1',
+          port: Number($('proxyPort').value || 10808)
+        },
+        target_processes: splitTargets($('targets').value),
+        child_injection: $('childInjection').checked,
+        child_injection_mode: 'filtered',
+        bypass: {
+          localhost: $('bypassLocalhost').checked,
+          private_networks: $('bypassPrivate').checked,
+          proxy_endpoint: $('bypassProxy').checked
+        },
+        fake_ip: {
+          enabled: $('fakeIp').checked,
+          cidr: '198.18.0.0/15'
+        },
+        proxy_rules: {
+          dns_mode: $('dnsMode').value,
+          ipv6_mode: $('ipv6Mode').value,
+          udp_mode: $('udpMode').value
+        },
+        timeout: {
+          connect: 5000,
+          send: 5000,
+          recv: 5000
+        }
+      };
+    }
+
+    function validate(config) {
+      if (!['http', 'socks5'].includes(config.proxy.type)) return '代理协议必须是 http 或 socks5';
+      if (!config.proxy.host) return '代理地址不能为空';
+      if (!Number.isInteger(config.proxy.port) || config.proxy.port < 1 || config.proxy.port > 65535) return '代理端口必须是 1-65535';
+      if (!config.target_processes.length) return '至少保留一个目标进程';
+      if (!config.target_processes.every(p => ['codex.exe'].includes(p.toLowerCase()))) return 'v1 只允许 Codex.exe / codex.exe';
+      return '';
+    }
+
+    function refreshJson() {
+      const config = buildConfig();
+      $('json').value = JSON.stringify(config, null, 2);
+      const error = validate(config);
+      $('status').textContent = error || '配置有效';
+      $('status').className = error ? 'status bad' : 'status';
+    }
+
+    function applyConfig(config) {
+      $('proxyType').value = config.proxy?.type || 'http';
+      $('proxyHost').value = config.proxy?.host || '127.0.0.1';
+      $('proxyPort').value = config.proxy?.port || 10808;
+      $('targets').value = (config.target_processes || ['Codex.exe', 'codex.exe']).join(',');
+      $('childInjection').checked = config.child_injection !== false;
+      $('fakeIp').checked = !!config.fake_ip?.enabled;
+      $('dnsMode').value = config.proxy_rules?.dns_mode || 'proxy';
+      $('ipv6Mode').value = config.proxy_rules?.ipv6_mode || 'block';
+      $('udpMode').value = config.proxy_rules?.udp_mode || 'block';
+      $('bypassLocalhost').checked = config.bypass?.localhost !== false;
+      $('bypassPrivate').checked = config.bypass?.private_networks !== false;
+      $('bypassProxy').checked = config.bypass?.proxy_endpoint !== false;
+      refreshJson();
+    }
+
+    document.querySelectorAll('input,select').forEach(el => el.addEventListener('input', refreshJson));
+    $('preset').addEventListener('click', () => {
+      applyConfig({
+        proxy: { type: 'http', host: '127.0.0.1', port: 10808 },
+        target_processes: ['Codex.exe', 'codex.exe'],
+        child_injection: true,
+        fake_ip: { enabled: false },
+        proxy_rules: { dns_mode: 'proxy', ipv6_mode: 'block', udp_mode: 'block' },
+        bypass: { localhost: true, private_networks: true, proxy_endpoint: true }
+      });
+    });
+    $('download').addEventListener('click', () => {
+      const config = buildConfig();
+      const error = validate(config);
+      if (error) { $('status').textContent = error; $('status').className = 'status bad'; return; }
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'config.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    $('copy').addEventListener('click', async () => {
+      await navigator.clipboard.writeText($('json').value);
+      $('status').textContent = '已复制 JSON';
+    });
+    $('importFile').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        applyConfig(JSON.parse(await file.text()));
+        $('status').textContent = '导入成功';
+      } catch {
+        $('status').textContent = '导入失败：JSON 无效';
+        $('status').className = 'status bad';
+      }
+    });
+
+    refreshJson();
+  </script>
+</body>
+</html>

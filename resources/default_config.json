@@ -1,0 +1,35 @@
+{
+  "_comment": "Codex Proxy Launcher configuration",
+  "_version": 1,
+  "log_level": "info",
+  "proxy": {
+    "type": "http",
+    "host": "127.0.0.1",
+    "port": 10808
+  },
+  "target_processes": [
+    "Codex.exe",
+    "codex.exe"
+  ],
+  "child_injection": true,
+  "child_injection_mode": "filtered",
+  "bypass": {
+    "localhost": true,
+    "private_networks": true,
+    "proxy_endpoint": true
+  },
+  "fake_ip": {
+    "enabled": false,
+    "cidr": "198.18.0.0/15"
+  },
+  "proxy_rules": {
+    "dns_mode": "proxy",
+    "ipv6_mode": "block",
+    "udp_mode": "block"
+  },
+  "timeout": {
+    "connect": 5000,
+    "send": 5000,
+    "recv": 5000
+  }
+}
