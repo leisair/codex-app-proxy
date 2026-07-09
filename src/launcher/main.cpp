@@ -3,6 +3,7 @@
 #include "common/process_utils.h"
 #include "common/string_utils.h"
 
+#include <algorithm>
 #include <iostream>
 #include <filesystem>
 #include <set>
@@ -86,6 +87,26 @@ void AppendUniqueProcesses(std::vector<ProcessInfo>* target,
   }
 }
 
+bool IsTargetDesktopChildProcess(const ProcessInfo& process) {
+  std::wstring path = ToLower(process.path);
+  std::wstring command = ToLower(process.command_line);
+  std::replace(path.begin(), path.end(), L'/', L'\\');
+  std::replace(command.begin(), command.end(), L'/', L'\\');
+
+  if (path.find(L"\\app\\resources\\codex.exe") != std::wstring::npos ||
+      command.find(L"\\app\\resources\\codex.exe") != std::wstring::npos) {
+    return command.find(L" app-server") != std::wstring::npos ||
+           command.find(L"\\resources\\codex.exe\" app-server") != std::wstring::npos;
+  }
+
+  std::wstring base = path.empty() ? ToLower(process.name) : GetBaseName(path);
+  if (base != L"codex.exe") {
+    return false;
+  }
+  return command.find(L"--type=utility") != std::wstring::npos &&
+         command.find(L"network.mojom.networkservice") != std::wstring::npos;
+}
+
 int AttachExisting(const std::wstring& codex_path, const std::wstring& dll_path) {
   std::wstring app_dir = GetDirName(codex_path);
   auto processes = EnumerateCodexAppProcesses(app_dir);
@@ -96,6 +117,12 @@ int AttachExisting(const std::wstring& codex_path, const std::wstring& dll_path)
 
   int injected = 0;
   for (const auto& process_info : processes) {
+    if (!IsTargetDesktopChildProcess(process_info)) {
+      Logger::Instance().Info(L"Attach skipped PID " +
+                              std::to_wstring(process_info.pid) + L" " +
+                              process_info.command_line);
+      continue;
+    }
     if (InjectProcessByPid(process_info.pid, dll_path) == 0) {
       ++injected;
       Logger::Instance().Info(L"Attached existing PID " +
@@ -242,12 +269,15 @@ void StartupInjectionSweep(const std::wstring& codex_path,
         Logger::Instance().Info(L"Startup sweep candidate PID " +
                                 std::to_wstring(process.pid) + L" parent " +
                                 std::to_wstring(process.parent_pid) + L" " +
-                                process.path);
+                                process.command_line);
       }
     }
 
     for (const auto& process : processes) {
       if (seen.count(process.pid) != 0) {
+        continue;
+      }
+      if (!IsTargetDesktopChildProcess(process)) {
         continue;
       }
       seen.insert(process.pid);

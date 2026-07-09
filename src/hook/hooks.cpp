@@ -11,6 +11,7 @@
 #include "hook/proxy_tunnel.h"
 
 #include <MinHook.h>
+#include <algorithm>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -86,6 +87,36 @@ std::wstring CommandProcessName(LPCWSTR application_name, LPWSTR command_line) {
   }
   size_t space = cmd.find(L' ');
   return GetBaseName(space == std::wstring::npos ? cmd : cmd.substr(0, space));
+}
+
+std::wstring CommandText(LPCWSTR application_name, LPWSTR command_line) {
+  std::wstring text;
+  if (application_name && application_name[0]) {
+    text += application_name;
+    text += L" ";
+  }
+  if (command_line && command_line[0]) {
+    text += command_line;
+  }
+  return ToLower(text);
+}
+
+bool ShouldInjectCreatedProcess(LPCWSTR application_name, LPWSTR command_line) {
+  if (!g_config.child_injection) {
+    return false;
+  }
+  std::wstring text = CommandText(application_name, command_line);
+  std::wstring name = CommandProcessName(application_name, command_line);
+  if (!IsAllowedProcess(g_config, name)) {
+    return false;
+  }
+
+  std::replace(text.begin(), text.end(), L'/', L'\\');
+  if (text.find(L"\\app\\resources\\codex.exe") != std::wstring::npos) {
+    return text.find(L" app-server") != std::wstring::npos;
+  }
+  return text.find(L"--type=utility") != std::wstring::npos &&
+         text.find(L"network.mojom.networkservice") != std::wstring::npos;
 }
 
 bool RewriteFakeIp(TargetEndpoint* endpoint) {
@@ -329,7 +360,7 @@ BOOL WINAPI HookCreateProcessW(LPCWSTR application_name, LPWSTR command_line,
                                LPSTARTUPINFOW startup_info,
                                LPPROCESS_INFORMATION process_information) {
   std::wstring name = CommandProcessName(application_name, command_line);
-  bool should_inject = g_config.child_injection && IsAllowedProcess(g_config, name);
+  bool should_inject = ShouldInjectCreatedProcess(application_name, command_line);
   DWORD flags = creation_flags;
   if (should_inject) {
     flags |= CREATE_SUSPENDED;

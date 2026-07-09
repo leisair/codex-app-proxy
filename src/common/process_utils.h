@@ -11,6 +11,7 @@ struct ProcessInfo {
   DWORD parent_pid = 0;
   std::wstring name;
   std::wstring path;
+  std::wstring command_line;
 };
 
 std::wstring GetUserProfileDir();

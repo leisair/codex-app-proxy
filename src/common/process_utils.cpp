@@ -13,6 +13,37 @@
 namespace codex_proxy {
 namespace {
 
+using NtQueryInformationProcessFn = LONG(WINAPI*)(HANDLE, int, PVOID, ULONG, PULONG);
+
+struct UnicodeStringLocal {
+  USHORT length = 0;
+  USHORT maximum_length = 0;
+  PWSTR buffer = nullptr;
+};
+
+struct RtlUserProcessParametersLocal {
+  BYTE reserved1[16];
+  PVOID reserved2[10];
+  UnicodeStringLocal image_path_name;
+  UnicodeStringLocal command_line;
+};
+
+struct PebLocal {
+  BYTE reserved1[2];
+  BYTE being_debugged = 0;
+  BYTE reserved2[1];
+  PVOID reserved3[2];
+  RtlUserProcessParametersLocal* process_parameters = nullptr;
+};
+
+struct ProcessBasicInformationLocal {
+  PVOID reserved1 = nullptr;
+  PebLocal* peb_base_address = nullptr;
+  PVOID reserved2[2];
+  ULONG_PTR unique_process_id = 0;
+  PVOID reserved3 = nullptr;
+};
+
 std::wstring GetEnvVar(const wchar_t* name) {
   DWORD size = GetEnvironmentVariableW(name, nullptr, 0);
   if (size == 0) {
@@ -59,6 +90,56 @@ std::wstring QueryProcessImagePath(DWORD pid) {
   CloseHandle(process);
   path.resize(size);
   return path;
+}
+
+std::wstring QueryProcessCommandLine(DWORD pid) {
+  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+                               FALSE, pid);
+  if (!process) {
+    return {};
+  }
+
+  HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+  auto query_process = reinterpret_cast<NtQueryInformationProcessFn>(
+      GetProcAddress(ntdll, "NtQueryInformationProcess"));
+  if (!query_process) {
+    CloseHandle(process);
+    return {};
+  }
+
+  ProcessBasicInformationLocal basic{};
+  LONG status = query_process(process, 0, &basic, sizeof(basic), nullptr);
+  if (status < 0 || !basic.peb_base_address) {
+    CloseHandle(process);
+    return {};
+  }
+
+  PebLocal peb{};
+  SIZE_T bytes_read = 0;
+  if (!ReadProcessMemory(process, basic.peb_base_address, &peb, sizeof(peb),
+                         &bytes_read) ||
+      !peb.process_parameters) {
+    CloseHandle(process);
+    return {};
+  }
+
+  RtlUserProcessParametersLocal parameters{};
+  if (!ReadProcessMemory(process, peb.process_parameters, &parameters,
+                         sizeof(parameters), &bytes_read) ||
+      !parameters.command_line.buffer || parameters.command_line.length == 0) {
+    CloseHandle(process);
+    return {};
+  }
+
+  std::wstring command_line(parameters.command_line.length / sizeof(wchar_t), L'\0');
+  if (!ReadProcessMemory(process, parameters.command_line.buffer,
+                         command_line.data(), parameters.command_line.length,
+                         &bytes_read)) {
+    CloseHandle(process);
+    return {};
+  }
+  CloseHandle(process);
+  return command_line;
 }
 
 std::vector<std::wstring> FindWindowsAppsCodexCandidates() {
@@ -340,6 +421,7 @@ std::vector<ProcessInfo> EnumerateCodexAppProcesses(const std::wstring& app_dir)
       info.parent_pid = entry.th32ParentProcessID;
       info.name = entry.szExeFile;
       info.path = path;
+      info.command_line = QueryProcessCommandLine(entry.th32ProcessID);
       processes.push_back(info);
     } while (Process32NextW(snapshot, &entry));
   }
@@ -396,6 +478,7 @@ std::vector<ProcessInfo> EnumerateCodexProcessTree(DWORD root_pid) {
     info.parent_pid = item.th32ParentProcessID;
     info.name = item.szExeFile;
     info.path = QueryProcessImagePath(item.th32ProcessID);
+    info.command_line = QueryProcessCommandLine(item.th32ProcessID);
     processes.push_back(info);
   }
 
