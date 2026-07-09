@@ -3,9 +3,10 @@
 Windows-only transparent proxy launcher for the Codex desktop app.
 
 The launcher starts the Codex Microsoft Store app executable, injects
-`codex_proxy_hook.dll`, and then exits. The DLL hooks the Codex process tree so
-non-local TCP traffic is tunneled through a local HTTP/SOCKS5 proxy such as
-V2RayN mixed port `127.0.0.1:10808`.
+`codex_proxy_hook.dll`, performs a short startup sweep to inject Codex child
+processes, and then exits. The DLL hooks the Codex process tree so non-local TCP
+traffic is tunneled through a local HTTP/SOCKS5 proxy such as V2RayN mixed port
+`127.0.0.1:10808`.
 
 ## Status
 

@@ -29,6 +29,31 @@ bool IsCodexProcessName(const std::wstring& name) {
   return lower == L"codex.exe";
 }
 
+bool IsCodexAppProcessName(const std::wstring& name) {
+  std::wstring lower = ToLower(GetBaseName(name));
+  return lower == L"codex.exe";
+}
+
+std::wstring QueryProcessImagePath(DWORD pid) {
+  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (!process) {
+    return {};
+  }
+  std::wstring path(MAX_PATH, L'\0');
+  DWORD size = static_cast<DWORD>(path.size());
+  while (!QueryFullProcessImageNameW(process, 0, path.data(), &size)) {
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+      CloseHandle(process);
+      return {};
+    }
+    path.resize(path.size() * 2);
+    size = static_cast<DWORD>(path.size());
+  }
+  CloseHandle(process);
+  path.resize(size);
+  return path;
+}
+
 std::vector<std::wstring> FindWindowsAppsCodexCandidates() {
   std::vector<std::wstring> candidates;
   std::wstring pattern = L"C:\\Program Files\\WindowsApps\\OpenAI.Codex_*";
@@ -213,6 +238,42 @@ DWORD FindNewestProcessIdByName(const std::wstring& process_name, DWORD after_pi
   }
   CloseHandle(snapshot);
   return best;
+}
+
+std::vector<ProcessInfo> EnumerateCodexAppProcesses(const std::wstring& app_dir) {
+  std::vector<ProcessInfo> processes;
+  std::wstring normalized_app_dir = ToLower(app_dir);
+  if (!normalized_app_dir.empty() && normalized_app_dir.back() != L'\\') {
+    normalized_app_dir += L"\\";
+  }
+
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE) {
+    return processes;
+  }
+
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  if (Process32FirstW(snapshot, &entry)) {
+    do {
+      if (!IsCodexAppProcessName(entry.szExeFile)) {
+        continue;
+      }
+      std::wstring path = QueryProcessImagePath(entry.th32ProcessID);
+      std::wstring lower_path = ToLower(path);
+      if (lower_path.rfind(normalized_app_dir, 0) != 0) {
+        continue;
+      }
+      ProcessInfo info;
+      info.pid = entry.th32ProcessID;
+      info.parent_pid = entry.th32ParentProcessID;
+      info.name = entry.szExeFile;
+      info.path = path;
+      processes.push_back(info);
+    } while (Process32NextW(snapshot, &entry));
+  }
+  CloseHandle(snapshot);
+  return processes;
 }
 
 }  // namespace codex_proxy

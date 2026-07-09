@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <filesystem>
+#include <set>
 #include <shellapi.h>
 #include <string>
 #include <thread>
@@ -92,7 +93,8 @@ int AttachExisting(const std::wstring& dll_path) {
 }
 
 int StartSuspendedAndInject(const std::wstring& codex_path,
-                            const std::wstring& dll_path) {
+                            const std::wstring& dll_path,
+                            DWORD* launched_pid) {
   STARTUPINFOW si{};
   si.cb = sizeof(si);
   PROCESS_INFORMATION pi{};
@@ -117,6 +119,9 @@ int StartSuspendedAndInject(const std::wstring& codex_path,
 
   ResumeThread(pi.hThread);
   Logger::Instance().Info(L"Started and injected Codex PID " + std::to_wstring(pi.dwProcessId));
+  if (launched_pid) {
+    *launched_pid = pi.dwProcessId;
+  }
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
   return 0;
@@ -169,6 +174,55 @@ int ShellLaunchAndAttach(const std::wstring& codex_path, const std::wstring& dll
   return 0;
 }
 
+int InjectProcessByPid(DWORD pid, const std::wstring& dll_path) {
+  HANDLE process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
+                                   PROCESS_VM_OPERATION | PROCESS_VM_WRITE |
+                                   PROCESS_VM_READ,
+                               FALSE, pid);
+  if (!process) {
+    Logger::Instance().Warn(FormatLastError(L"OpenProcess failed for PID " +
+                                                std::to_wstring(pid),
+                                            GetLastError()));
+    return 1;
+  }
+  std::wstring error;
+  bool ok = InjectDllIntoProcess(process, dll_path, &error);
+  CloseHandle(process);
+  if (!ok) {
+    Logger::Instance().Warn(L"Startup sweep injection failed for PID " +
+                            std::to_wstring(pid) + L": " + error);
+    return 2;
+  }
+  return 0;
+}
+
+void StartupInjectionSweep(const std::wstring& codex_path,
+                           const std::wstring& dll_path,
+                           DWORD launched_pid) {
+  std::wstring app_dir = GetDirName(codex_path);
+  std::set<DWORD> seen;
+  if (launched_pid != 0) {
+    seen.insert(launched_pid);
+  }
+
+  Logger::Instance().Info(L"Starting 30s startup injection sweep for " + app_dir);
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+  while (std::chrono::steady_clock::now() < deadline) {
+    for (const auto& process : EnumerateCodexAppProcesses(app_dir)) {
+      if (seen.count(process.pid) != 0) {
+        continue;
+      }
+      seen.insert(process.pid);
+      if (InjectProcessByPid(process.pid, dll_path) == 0) {
+        Logger::Instance().Info(L"Startup sweep injected PID " +
+                                std::to_wstring(process.pid) + L" " + process.path);
+      }
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  }
+  Logger::Instance().Info(L"Startup injection sweep complete");
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
@@ -210,11 +264,13 @@ int wmain(int argc, wchar_t** argv) {
   }
 
   Logger::Instance().Info(L"Using Codex path: " + codex_path);
-  int result = StartSuspendedAndInject(codex_path, dll_path);
+  DWORD launched_pid = 0;
+  int result = StartSuspendedAndInject(codex_path, dll_path, &launched_pid);
   if (result == -1) {
     result = ShellLaunchAndAttach(codex_path, dll_path);
   }
   if (result == 0) {
+    StartupInjectionSweep(codex_path, dll_path, launched_pid);
     std::wcout << L"Codex launched through proxy hook. Log: "
                << Logger::Instance().LogPath() << L"\n";
   }
