@@ -67,29 +67,27 @@ std::wstring AppUserModelIdFromCodexPath(const std::wstring& codex_path) {
   return L"OpenAI.Codex_2p2nqsd0c76g0!App";
 }
 
+int InjectProcessByPid(DWORD pid, const std::wstring& dll_path);
+
 int AttachExisting(const std::wstring& codex_path, const std::wstring& dll_path) {
-  DWORD pid = FindNewestProcessIdByPath(codex_path);
-  if (pid == 0) {
-    std::wcerr << L"No running Codex desktop app process found.\n";
+  std::wstring app_dir = GetDirName(codex_path);
+  auto processes = EnumerateCodexAppProcesses(app_dir);
+  if (processes.empty()) {
+    std::wcerr << L"No running Codex desktop app processes found.\n";
     return 2;
   }
-  HANDLE process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
-                                   PROCESS_VM_OPERATION | PROCESS_VM_WRITE |
-                                   PROCESS_VM_READ,
-                               FALSE, pid);
-  if (!process) {
-    std::wcerr << L"OpenProcess failed for PID " << pid << L". Try running as administrator.\n";
-    return 3;
+
+  int injected = 0;
+  for (const auto& process_info : processes) {
+    if (InjectProcessByPid(process_info.pid, dll_path) == 0) {
+      ++injected;
+      Logger::Instance().Info(L"Attached existing PID " +
+                              std::to_wstring(process_info.pid) + L" " +
+                              process_info.path);
+    }
   }
-  std::wstring error;
-  bool ok = InjectDllIntoProcess(process, dll_path, &error);
-  CloseHandle(process);
-  if (!ok) {
-    std::wcerr << L"Injection failed: " << error << L"\n";
-    return 4;
-  }
-  std::wcout << L"Injected existing Codex.exe PID " << pid << L".\n";
-  return 0;
+  std::wcout << L"Attached " << injected << L" Codex desktop app process(es).\n";
+  return injected > 0 ? 0 : 4;
 }
 
 int StartSuspendedAndInject(const std::wstring& codex_path,
@@ -205,27 +203,18 @@ void StartupInjectionSweep(const std::wstring& codex_path,
                            DWORD launched_pid) {
   std::wstring app_dir = GetDirName(codex_path);
   std::set<DWORD> seen;
-  std::set<DWORD> tree;
   if (launched_pid != 0) {
     seen.insert(launched_pid);
-    tree.insert(launched_pid);
   }
 
-  Logger::Instance().Info(L"Starting 30s startup injection sweep for " + app_dir);
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+  Logger::Instance().Info(L"Starting 180s startup injection sweep for " + app_dir);
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(180);
   while (std::chrono::steady_clock::now() < deadline) {
     for (const auto& process : EnumerateCodexAppProcesses(app_dir)) {
       if (seen.count(process.pid) != 0) {
         continue;
       }
-      if (tree.count(process.parent_pid) == 0) {
-        Logger::Instance().Info(L"Startup sweep skipped non-tree PID " +
-                                std::to_wstring(process.pid) + L" parent=" +
-                                std::to_wstring(process.parent_pid) + L" " + process.path);
-        continue;
-      }
       seen.insert(process.pid);
-      tree.insert(process.pid);
       if (InjectProcessByPid(process.pid, dll_path) == 0) {
         Logger::Instance().Info(L"Startup sweep injected PID " +
                                 std::to_wstring(process.pid) + L" " + process.path);
