@@ -33,6 +33,7 @@ struct PebLocal {
   BYTE being_debugged = 0;
   BYTE reserved2[1];
   PVOID reserved3[2];
+  PVOID ldr = nullptr;
   RtlUserProcessParametersLocal* process_parameters = nullptr;
 };
 
