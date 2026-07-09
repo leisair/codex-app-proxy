@@ -219,6 +219,9 @@ void StartupInjectionSweep(const std::wstring& codex_path,
         continue;
       }
       if (tree.count(process.parent_pid) == 0) {
+        Logger::Instance().Info(L"Startup sweep skipped non-tree PID " +
+                                std::to_wstring(process.pid) + L" parent=" +
+                                std::to_wstring(process.parent_pid) + L" " + process.path);
         continue;
       }
       seen.insert(process.pid);

@@ -57,6 +57,18 @@ bool ReadHttpResponse(SOCKET socket) {
   return response.rfind("HTTP/1.1 200", 0) == 0 || response.rfind("HTTP/1.0 200", 0) == 0;
 }
 
+void SetSocketBlockingMode(SOCKET socket, bool blocking) {
+  u_long mode = blocking ? 0 : 1;
+  ioctlsocket(socket, FIONBIO, &mode);
+}
+
+void SetSocketTimeouts(SOCKET socket, const TimeoutConfig& timeout) {
+  setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO,
+             reinterpret_cast<const char*>(&timeout.send_ms), sizeof(timeout.send_ms));
+  setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,
+             reinterpret_cast<const char*>(&timeout.recv_ms), sizeof(timeout.recv_ms));
+}
+
 bool Socks5Tunnel(SOCKET socket, const TargetEndpoint& endpoint) {
   const unsigned char greeting[] = {0x05, 0x01, 0x00};
   if (!SendAll(socket, reinterpret_cast<const char*>(greeting), sizeof(greeting))) {
@@ -202,11 +214,22 @@ bool IsTcpSocket(SOCKET socket) {
 }
 
 bool EstablishProxyTunnel(SOCKET socket, const AppConfig& config,
-                          const TargetEndpoint& endpoint, int* wsa_error) {
+                          const TargetEndpoint& endpoint, bool restore_nonblocking,
+                          int* wsa_error) {
   if (g_inside_proxy) {
     return false;
   }
   g_inside_proxy = true;
+  SetSocketBlockingMode(socket, true);
+  SetSocketTimeouts(socket, config.timeout);
+
+  auto finish = [&](bool ok) {
+    if (restore_nonblocking) {
+      SetSocketBlockingMode(socket, false);
+    }
+    g_inside_proxy = false;
+    return ok;
+  };
 
   addrinfo hints{};
   hints.ai_socktype = SOCK_STREAM;
@@ -218,8 +241,7 @@ bool EstablishProxyTunnel(SOCKET socket, const AppConfig& config,
     if (wsa_error) {
       *wsa_error = WSAHOST_NOT_FOUND;
     }
-    g_inside_proxy = false;
-    return false;
+    return finish(false);
   }
 
   bool connected = false;
@@ -234,8 +256,7 @@ bool EstablishProxyTunnel(SOCKET socket, const AppConfig& config,
     if (wsa_error) {
       *wsa_error = WSAGetLastError();
     }
-    g_inside_proxy = false;
-    return false;
+    return finish(false);
   }
 
   bool tunnel_ok = false;
@@ -255,8 +276,7 @@ bool EstablishProxyTunnel(SOCKET socket, const AppConfig& config,
   if (!tunnel_ok && wsa_error) {
     *wsa_error = WSAECONNRESET;
   }
-  g_inside_proxy = false;
-  return tunnel_ok;
+  return finish(tunnel_ok);
 }
 
 }  // namespace codex_proxy

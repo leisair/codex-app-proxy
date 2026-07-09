@@ -22,7 +22,8 @@ bool EndpointFromSockAddr(const sockaddr* addr, int addr_len, const AppConfig& c
                           TargetEndpoint* endpoint);
 bool ShouldBypass(const AppConfig& config, const TargetEndpoint& endpoint);
 bool EstablishProxyTunnel(SOCKET socket, const AppConfig& config,
-                          const TargetEndpoint& endpoint, int* wsa_error);
+                          const TargetEndpoint& endpoint, bool restore_nonblocking,
+                          int* wsa_error);
 bool IsTcpSocket(SOCKET socket);
 
 }  // namespace codex_proxy

@@ -34,6 +34,7 @@ using CreateProcessWFn = BOOL(WINAPI*)(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES,
                                         LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
 using WSAIoctlFn = int(WSAAPI*)(SOCKET, DWORD, LPVOID, DWORD, LPVOID, DWORD, LPDWORD,
                                 LPWSAOVERLAPPED, LPWSAOVERLAPPED_COMPLETION_ROUTINE);
+using IoctlSocketFn = int(WSAAPI*)(SOCKET, long, u_long*);
 using ConnectExFn = BOOL(PASCAL*)(SOCKET, const sockaddr*, int, PVOID, DWORD, LPDWORD,
                                   LPOVERLAPPED);
 
@@ -45,19 +46,25 @@ FreeAddrInfoFn g_freeaddrinfo = nullptr;
 FreeAddrInfoWFn g_freeaddrinfo_w = nullptr;
 CreateProcessWFn g_create_process_w = nullptr;
 WSAIoctlFn g_wsa_ioctl = nullptr;
+IoctlSocketFn g_ioctlsocket = nullptr;
 ConnectExFn g_connect_ex = nullptr;
 
 AppConfig g_config;
 std::wstring g_dll_path;
 std::mutex g_fake_ip_mutex;
+std::mutex g_socket_state_mutex;
 uint32_t g_next_fake_ip = 0xC6120001u;
 std::map<uint32_t, std::string> g_fake_ip_to_host;
 std::map<void*, bool> g_fake_addrinfo_allocations;
+std::map<SOCKET, bool> g_socket_nonblocking;
 
 bool CurrentProcessAllowed() {
   wchar_t path[MAX_PATH]{};
   GetModuleFileNameW(nullptr, path, MAX_PATH);
-  return IsAllowedProcess(g_config, path);
+  bool allowed = IsAllowedProcess(g_config, path);
+  Logger::Instance().Info(std::wstring(L"DLL loaded in process path=") + path +
+                          L" allowed=" + (allowed ? L"true" : L"false"));
+  return allowed;
 }
 
 std::wstring CommandProcessName(LPCWSTR application_name, LPWSTR command_line) {
@@ -98,6 +105,17 @@ bool RewriteFakeIp(TargetEndpoint* endpoint) {
   return true;
 }
 
+void MarkSocketNonBlocking(SOCKET socket, bool nonblocking) {
+  std::lock_guard<std::mutex> lock(g_socket_state_mutex);
+  g_socket_nonblocking[socket] = nonblocking;
+}
+
+bool IsSocketMarkedNonBlocking(SOCKET socket) {
+  std::lock_guard<std::mutex> lock(g_socket_state_mutex);
+  auto it = g_socket_nonblocking.find(socket);
+  return it != g_socket_nonblocking.end() && it->second;
+}
+
 int ProxyAwareConnect(SOCKET socket, const sockaddr* name, int namelen) {
   if (!IsTcpSocket(socket)) {
     if (g_config.proxy_rules.udp_mode == UdpMode::Block) {
@@ -122,15 +140,22 @@ int ProxyAwareConnect(SOCKET socket, const sockaddr* name, int namelen) {
     return g_connect(socket, name, namelen);
   }
   if (ShouldBypass(g_config, endpoint)) {
+    Logger::Instance().Info(L"Bypass connect " + Utf8ToWide(endpoint.host) +
+                            L":" + std::to_wstring(endpoint.port));
     return g_connect(socket, name, namelen);
   }
 
   int wsa_error = 0;
-  bool ok = EstablishProxyTunnel(socket, g_config, endpoint, &wsa_error);
+  bool was_nonblocking = IsSocketMarkedNonBlocking(socket);
+  Logger::Instance().Info(L"Proxy connect " + Utf8ToWide(endpoint.host) +
+                          L":" + std::to_wstring(endpoint.port) +
+                          L" nonblocking=" + (was_nonblocking ? L"true" : L"false"));
+  bool ok = EstablishProxyTunnel(socket, g_config, endpoint, was_nonblocking, &wsa_error);
   if (!ok) {
     WSASetLastError(wsa_error ? wsa_error : WSAECONNRESET);
     Logger::Instance().Warn(L"Proxy tunnel failed for " + Utf8ToWide(endpoint.host) +
-                            L":" + std::to_wstring(endpoint.port));
+                            L":" + std::to_wstring(endpoint.port) +
+                            L" wsa=" + std::to_wstring(wsa_error));
     return SOCKET_ERROR;
   }
   Logger::Instance().Info(L"Proxy tunnel established for " + Utf8ToWide(endpoint.host) +
@@ -171,9 +196,8 @@ BOOL PASCAL HookConnectEx(SOCKET socket, const sockaddr* name, int namelen,
   if (bytes_sent) {
     *bytes_sent = 0;
   }
-  if (overlapped) {
-    SetLastError(ERROR_IO_PENDING);
-  }
+  (void)overlapped;
+  SetLastError(0);
   return TRUE;
 }
 
@@ -335,6 +359,10 @@ int WSAAPI HookWSAIoctl(SOCKET socket, DWORD io_control_code, LPVOID in_buffer,
                         DWORD in_buffer_size, LPVOID out_buffer, DWORD out_buffer_size,
                         LPDWORD bytes_returned, LPWSAOVERLAPPED overlapped,
                         LPWSAOVERLAPPED_COMPLETION_ROUTINE completion_routine) {
+  if (io_control_code == FIONBIO && in_buffer && in_buffer_size >= sizeof(u_long)) {
+    MarkSocketNonBlocking(socket, *static_cast<u_long*>(in_buffer) != 0);
+  }
+
   int rc = g_wsa_ioctl(socket, io_control_code, in_buffer, in_buffer_size, out_buffer,
                        out_buffer_size, bytes_returned, overlapped, completion_routine);
   if (rc == 0 && io_control_code == SIO_GET_EXTENSION_FUNCTION_POINTER &&
@@ -348,6 +376,13 @@ int WSAAPI HookWSAIoctl(SOCKET socket, DWORD io_control_code, LPVOID in_buffer,
     }
   }
   return rc;
+}
+
+int WSAAPI HookIoctlSocket(SOCKET socket, long cmd, u_long* argp) {
+  if (cmd == FIONBIO && argp) {
+    MarkSocketNonBlocking(socket, *argp != 0);
+  }
+  return g_ioctlsocket(socket, cmd, argp);
 }
 
 bool HookApi(const wchar_t* module, const char* name, void* hook, void** original) {
@@ -366,7 +401,12 @@ bool InstallHooks(void* module) {
   g_dll_path = GetModuleDir(static_cast<HMODULE>(module)) + L"\\codex_proxy_hook.dll";
 
   std::wstring error;
-  LoadConfig(DefaultConfigPath(), &g_config, &error);
+  if (!LoadConfig(DefaultConfigPath(), &g_config, &error)) {
+    Logger::Instance().Warn(L"Failed to load config, using defaults: " + error);
+  }
+  Logger::Instance().Info(L"Hook config proxy=" + Utf8ToWide(g_config.proxy.host) +
+                          L":" + std::to_wstring(g_config.proxy.port) +
+                          L" type=" + Utf8ToWide(ProxyTypeToString(g_config.proxy.type)));
   if (!CurrentProcessAllowed()) {
     Logger::Instance().Warn(L"Process not allowed by config; hooks skipped");
     return true;
@@ -392,6 +432,8 @@ bool InstallHooks(void* module) {
           reinterpret_cast<void**>(&g_freeaddrinfo_w));
   HookApi(L"ws2_32.dll", "WSAIoctl", reinterpret_cast<void*>(HookWSAIoctl),
           reinterpret_cast<void**>(&g_wsa_ioctl));
+  HookApi(L"ws2_32.dll", "ioctlsocket", reinterpret_cast<void*>(HookIoctlSocket),
+          reinterpret_cast<void**>(&g_ioctlsocket));
   HookApi(L"kernel32.dll", "CreateProcessW", reinterpret_cast<void*>(HookCreateProcessW),
           reinterpret_cast<void**>(&g_create_process_w));
 
