@@ -32,24 +32,174 @@ bool IsProxyEndpointIpv4(uint32_t host_order, uint16_t port, const AppConfig& co
   return ntohl(proxy_addr.s_addr) == host_order && port == config.proxy.port;
 }
 
-bool SendAll(SOCKET socket, const char* data, int length) {
-  int sent = 0;
-  while (sent < length) {
-    int rc = send(socket, data + sent, length - sent, 0);
-    if (rc <= 0) {
+bool IsWouldBlock(int error) {
+  return error == WSAEWOULDBLOCK || error == WSAEINPROGRESS ||
+         error == WSAEALREADY;
+}
+
+timeval TimeoutToTimeval(int timeout_ms) {
+  timeval timeout{};
+  timeout.tv_sec = timeout_ms / 1000;
+  timeout.tv_usec = (timeout_ms % 1000) * 1000;
+  return timeout;
+}
+
+bool WaitForSocket(SOCKET socket, bool wait_write, int timeout_ms, int* wsa_error) {
+  fd_set read_set;
+  fd_set write_set;
+  fd_set except_set;
+  FD_ZERO(&read_set);
+  FD_ZERO(&write_set);
+  FD_ZERO(&except_set);
+  if (wait_write) {
+    FD_SET(socket, &write_set);
+  } else {
+    FD_SET(socket, &read_set);
+  }
+  FD_SET(socket, &except_set);
+
+  timeval timeout = TimeoutToTimeval(timeout_ms);
+  int rc = select(0, wait_write ? nullptr : &read_set,
+                  wait_write ? &write_set : nullptr, &except_set, &timeout);
+  if (rc > 0) {
+    if (FD_ISSET(socket, &except_set)) {
+      int socket_error = 0;
+      int length = sizeof(socket_error);
+      if (getsockopt(socket, SOL_SOCKET, SO_ERROR,
+                     reinterpret_cast<char*>(&socket_error), &length) == 0 &&
+          socket_error != 0) {
+        if (wsa_error) {
+          *wsa_error = socket_error;
+        }
+        return false;
+      }
+      if (wsa_error) {
+        *wsa_error = WSAECONNRESET;
+      }
       return false;
     }
-    sent += rc;
+    return true;
+  }
+
+  if (wsa_error) {
+    *wsa_error = rc == 0 ? WSAETIMEDOUT : WSAGetLastError();
+  }
+  return false;
+}
+
+bool WaitForConnect(SOCKET socket, int timeout_ms, int* wsa_error) {
+  if (!WaitForSocket(socket, true, timeout_ms, wsa_error)) {
+    return false;
+  }
+
+  int socket_error = 0;
+  int length = sizeof(socket_error);
+  if (getsockopt(socket, SOL_SOCKET, SO_ERROR,
+                 reinterpret_cast<char*>(&socket_error), &length) != 0) {
+    if (wsa_error) {
+      *wsa_error = WSAGetLastError();
+    }
+    return false;
+  }
+  if (socket_error != 0) {
+    if (wsa_error) {
+      *wsa_error = socket_error;
+    }
+    return false;
   }
   return true;
 }
 
-bool ReadHttpResponse(SOCKET socket) {
+bool ConnectWithWait(SOCKET socket, const sockaddr* addr, int addr_len,
+                     int timeout_ms, int* wsa_error) {
+  if (connect(socket, addr, addr_len) == 0) {
+    return true;
+  }
+
+  int error = WSAGetLastError();
+  if (!IsWouldBlock(error)) {
+    if (wsa_error) {
+      *wsa_error = error;
+    }
+    return false;
+  }
+  return WaitForConnect(socket, timeout_ms, wsa_error);
+}
+
+bool SendAll(SOCKET socket, const char* data, int length, int timeout_ms,
+             int* wsa_error) {
+  int sent = 0;
+  while (sent < length) {
+    int rc = send(socket, data + sent, length - sent, 0);
+    if (rc > 0) {
+      sent += rc;
+      continue;
+    }
+    int error = WSAGetLastError();
+    if (IsWouldBlock(error)) {
+      if (!WaitForSocket(socket, true, timeout_ms, wsa_error)) {
+        return false;
+      }
+      continue;
+    }
+    if (wsa_error) {
+      *wsa_error = error;
+    }
+    return false;
+  }
+  return true;
+}
+
+bool RecvSome(SOCKET socket, char* data, int length, int timeout_ms, int* wsa_error,
+              int* received) {
+  while (true) {
+    int rc = recv(socket, data, length, 0);
+    if (rc > 0) {
+      if (received) {
+        *received = rc;
+      }
+      return true;
+    }
+    if (rc == 0) {
+      if (wsa_error) {
+        *wsa_error = WSAECONNRESET;
+      }
+      return false;
+    }
+    int error = WSAGetLastError();
+    if (IsWouldBlock(error)) {
+      if (!WaitForSocket(socket, false, timeout_ms, wsa_error)) {
+        return false;
+      }
+      continue;
+    }
+    if (wsa_error) {
+      *wsa_error = error;
+    }
+    return false;
+  }
+}
+
+bool RecvExact(SOCKET socket, char* data, int length, int timeout_ms, int* wsa_error) {
+  int received = 0;
+  while (received < length) {
+    int chunk = 0;
+    if (!RecvSome(socket, data + received, length - received, timeout_ms,
+                  wsa_error, &chunk)) {
+      return false;
+    }
+    received += chunk;
+  }
+  return true;
+}
+
+bool ReadHttpResponse(SOCKET socket, int timeout_ms, int* wsa_error) {
   std::string response;
   std::array<char, 512> buffer{};
   while (response.find("\r\n\r\n") == std::string::npos && response.size() < 8192) {
-    int rc = recv(socket, buffer.data(), static_cast<int>(buffer.size()), 0);
-    if (rc <= 0) {
+    int rc = 0;
+    if (!RecvSome(socket, buffer.data(), static_cast<int>(buffer.size()),
+                  timeout_ms, wsa_error, &rc)) {
       return false;
     }
     response.append(buffer.data(), rc);
@@ -69,13 +219,16 @@ void SetSocketTimeouts(SOCKET socket, const TimeoutConfig& timeout) {
              reinterpret_cast<const char*>(&timeout.recv_ms), sizeof(timeout.recv_ms));
 }
 
-bool Socks5Tunnel(SOCKET socket, const TargetEndpoint& endpoint) {
+bool Socks5Tunnel(SOCKET socket, const TargetEndpoint& endpoint, int timeout_ms,
+                  int* wsa_error) {
   const unsigned char greeting[] = {0x05, 0x01, 0x00};
-  if (!SendAll(socket, reinterpret_cast<const char*>(greeting), sizeof(greeting))) {
+  if (!SendAll(socket, reinterpret_cast<const char*>(greeting),
+               static_cast<int>(sizeof(greeting)), timeout_ms, wsa_error)) {
     return false;
   }
   unsigned char auth[2]{};
-  if (recv(socket, reinterpret_cast<char*>(auth), 2, 0) != 2 || auth[0] != 0x05 ||
+  if (!RecvExact(socket, reinterpret_cast<char*>(auth), 2, timeout_ms, wsa_error) ||
+      auth[0] != 0x05 ||
       auth[1] != 0x00) {
     return false;
   }
@@ -104,11 +257,12 @@ bool Socks5Tunnel(SOCKET socket, const TargetEndpoint& endpoint) {
   request.push_back(static_cast<unsigned char>(endpoint.port & 0xFF));
 
   if (!SendAll(socket, reinterpret_cast<const char*>(request.data()),
-               static_cast<int>(request.size()))) {
+               static_cast<int>(request.size()), timeout_ms, wsa_error)) {
     return false;
   }
   unsigned char reply[4]{};
-  if (recv(socket, reinterpret_cast<char*>(reply), 4, 0) != 4 || reply[0] != 0x05 ||
+  if (!RecvExact(socket, reinterpret_cast<char*>(reply), 4, timeout_ms, wsa_error) ||
+      reply[0] != 0x05 ||
       reply[1] != 0x00) {
     return false;
   }
@@ -119,7 +273,7 @@ bool Socks5Tunnel(SOCKET socket, const TargetEndpoint& endpoint) {
     to_read = 16 + 2;
   } else if (reply[3] == 0x03) {
     unsigned char len = 0;
-    if (recv(socket, reinterpret_cast<char*>(&len), 1, 0) != 1) {
+    if (!RecvExact(socket, reinterpret_cast<char*>(&len), 1, timeout_ms, wsa_error)) {
       return false;
     }
     to_read = len + 2;
@@ -127,7 +281,7 @@ bool Socks5Tunnel(SOCKET socket, const TargetEndpoint& endpoint) {
     return false;
   }
   std::vector<char> discard(static_cast<size_t>(to_read));
-  return recv(socket, discard.data(), to_read, 0) == to_read;
+  return RecvExact(socket, discard.data(), to_read, timeout_ms, wsa_error);
 }
 
 std::string FormatHostPortForHttpConnect(const TargetEndpoint& endpoint) {
@@ -245,18 +399,25 @@ bool EstablishProxyTunnel(SOCKET socket, const AppConfig& config,
   }
 
   bool connected = false;
+  int last_connect_error = 0;
   for (addrinfo* item = results; item; item = item->ai_next) {
-    if (connect(socket, item->ai_addr, static_cast<int>(item->ai_addrlen)) == 0) {
+    int connect_error = 0;
+    if (ConnectWithWait(socket, item->ai_addr, static_cast<int>(item->ai_addrlen),
+                        config.timeout.connect_ms, &connect_error)) {
       connected = true;
       break;
     }
+    last_connect_error = connect_error;
   }
   freeaddrinfo(results);
   if (!connected) {
     if (wsa_error) {
-      *wsa_error = WSAGetLastError();
+      *wsa_error = last_connect_error != 0 ? last_connect_error : WSAGetLastError();
     }
     return finish(false);
+  }
+  if (wsa_error) {
+    *wsa_error = 0;
   }
 
   bool tunnel_ok = false;
@@ -267,13 +428,14 @@ bool EstablishProxyTunnel(SOCKET socket, const AppConfig& config,
             << "Host: " << authority << "\r\n"
             << "Proxy-Connection: Keep-Alive\r\n\r\n";
     std::string payload = request.str();
-    tunnel_ok = SendAll(socket, payload.data(), static_cast<int>(payload.size())) &&
-                ReadHttpResponse(socket);
+    tunnel_ok = SendAll(socket, payload.data(), static_cast<int>(payload.size()),
+                        config.timeout.send_ms, wsa_error) &&
+                ReadHttpResponse(socket, config.timeout.recv_ms, wsa_error);
   } else {
-    tunnel_ok = Socks5Tunnel(socket, endpoint);
+    tunnel_ok = Socks5Tunnel(socket, endpoint, config.timeout.recv_ms, wsa_error);
   }
 
-  if (!tunnel_ok && wsa_error) {
+  if (!tunnel_ok && wsa_error && *wsa_error == 0) {
     *wsa_error = WSAECONNRESET;
   }
   return finish(tunnel_ok);

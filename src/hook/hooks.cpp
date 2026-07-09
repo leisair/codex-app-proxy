@@ -359,12 +359,12 @@ int WSAAPI HookWSAIoctl(SOCKET socket, DWORD io_control_code, LPVOID in_buffer,
                         DWORD in_buffer_size, LPVOID out_buffer, DWORD out_buffer_size,
                         LPDWORD bytes_returned, LPWSAOVERLAPPED overlapped,
                         LPWSAOVERLAPPED_COMPLETION_ROUTINE completion_routine) {
-  if (io_control_code == FIONBIO && in_buffer && in_buffer_size >= sizeof(u_long)) {
-    MarkSocketNonBlocking(socket, *static_cast<u_long*>(in_buffer) != 0);
-  }
-
   int rc = g_wsa_ioctl(socket, io_control_code, in_buffer, in_buffer_size, out_buffer,
                        out_buffer_size, bytes_returned, overlapped, completion_routine);
+  if (rc == 0 && io_control_code == FIONBIO && in_buffer &&
+      in_buffer_size >= sizeof(u_long)) {
+    MarkSocketNonBlocking(socket, *static_cast<u_long*>(in_buffer) != 0);
+  }
   if (rc == 0 && io_control_code == SIO_GET_EXTENSION_FUNCTION_POINTER &&
       in_buffer && in_buffer_size == sizeof(GUID) && out_buffer &&
       out_buffer_size >= sizeof(void*)) {
@@ -379,10 +379,11 @@ int WSAAPI HookWSAIoctl(SOCKET socket, DWORD io_control_code, LPVOID in_buffer,
 }
 
 int WSAAPI HookIoctlSocket(SOCKET socket, long cmd, u_long* argp) {
-  if (cmd == FIONBIO && argp) {
+  int rc = g_ioctlsocket(socket, cmd, argp);
+  if (rc == 0 && cmd == FIONBIO && argp) {
     MarkSocketNonBlocking(socket, *argp != 0);
   }
-  return g_ioctlsocket(socket, cmd, argp);
+  return rc;
 }
 
 bool HookApi(const wchar_t* module, const char* name, void* hook, void** original) {
