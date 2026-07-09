@@ -67,10 +67,10 @@ std::wstring AppUserModelIdFromCodexPath(const std::wstring& codex_path) {
   return L"OpenAI.Codex_2p2nqsd0c76g0!App";
 }
 
-int AttachExisting(const std::wstring& dll_path) {
-  DWORD pid = FindNewestProcessIdByName(L"Codex.exe");
+int AttachExisting(const std::wstring& codex_path, const std::wstring& dll_path) {
+  DWORD pid = FindNewestProcessIdByPath(codex_path);
   if (pid == 0) {
-    std::wcerr << L"No running Codex.exe found.\n";
+    std::wcerr << L"No running Codex desktop app process found.\n";
     return 2;
   }
   HANDLE process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
@@ -127,10 +127,11 @@ int StartSuspendedAndInject(const std::wstring& codex_path,
   return 0;
 }
 
-int ShellLaunchAndAttach(const std::wstring& codex_path, const std::wstring& dll_path) {
+int ShellLaunchAndAttach(const std::wstring& codex_path, const std::wstring& dll_path,
+                         DWORD* launched_pid) {
   Logger::Instance().Warn(
       L"Using fallback launch + attach. Earliest startup requests may not be covered.");
-  DWORD before = FindNewestProcessIdByName(L"Codex.exe");
+  DWORD before = FindNewestProcessIdByPath(codex_path);
   HINSTANCE result = ShellExecuteW(nullptr, L"open", codex_path.c_str(), nullptr,
                                    GetDirName(codex_path).c_str(), SW_SHOWNORMAL);
   if (reinterpret_cast<INT_PTR>(result) <= 32) {
@@ -146,7 +147,7 @@ int ShellLaunchAndAttach(const std::wstring& codex_path, const std::wstring& dll
   DWORD pid = 0;
   for (int i = 0; i < 50; ++i) {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    pid = FindNewestProcessIdByName(L"Codex.exe", before);
+    pid = FindNewestProcessIdByPath(codex_path, before);
     if (pid != 0) {
       break;
     }
@@ -170,6 +171,9 @@ int ShellLaunchAndAttach(const std::wstring& codex_path, const std::wstring& dll
   if (!ok) {
     std::wcerr << L"Fallback injection failed: " << error << L"\n";
     return 9;
+  }
+  if (launched_pid) {
+    *launched_pid = pid;
   }
   return 0;
 }
@@ -201,8 +205,10 @@ void StartupInjectionSweep(const std::wstring& codex_path,
                            DWORD launched_pid) {
   std::wstring app_dir = GetDirName(codex_path);
   std::set<DWORD> seen;
+  std::set<DWORD> tree;
   if (launched_pid != 0) {
     seen.insert(launched_pid);
+    tree.insert(launched_pid);
   }
 
   Logger::Instance().Info(L"Starting 30s startup injection sweep for " + app_dir);
@@ -212,7 +218,11 @@ void StartupInjectionSweep(const std::wstring& codex_path,
       if (seen.count(process.pid) != 0) {
         continue;
       }
+      if (tree.count(process.parent_pid) == 0) {
+        continue;
+      }
       seen.insert(process.pid);
+      tree.insert(process.pid);
       if (InjectProcessByPid(process.pid, dll_path) == 0) {
         Logger::Instance().Info(L"Startup sweep injected PID " +
                                 std::to_wstring(process.pid) + L" " + process.path);
@@ -247,27 +257,27 @@ int wmain(int argc, wchar_t** argv) {
     return 1;
   }
 
-  if (args.attach_existing) {
-    return AttachExisting(dll_path);
-  }
-
-  if (AnyCodexProcessRunning()) {
-    std::wcerr << L"Codex is already running. Close all Codex windows first, or use "
-                  L"--attach-existing for diagnostic attach mode.\n";
-    return 2;
-  }
-
   std::wstring codex_path = args.codex_path.empty() ? FindCodexAppPath() : args.codex_path;
   if (codex_path.empty() || !FileExists(codex_path)) {
     std::wcerr << L"Unable to locate Codex.exe. Use --codex <path>.\n";
     return 3;
   }
 
+  if (args.attach_existing) {
+    return AttachExisting(codex_path, dll_path);
+  }
+
+  if (AnyProcessRunningAtPath(codex_path)) {
+    std::wcerr << L"Codex desktop app is already running. Close Codex desktop first, "
+                  L"or use --attach-existing for diagnostic attach mode.\n";
+    return 2;
+  }
+
   Logger::Instance().Info(L"Using Codex path: " + codex_path);
   DWORD launched_pid = 0;
   int result = StartSuspendedAndInject(codex_path, dll_path, &launched_pid);
   if (result == -1) {
-    result = ShellLaunchAndAttach(codex_path, dll_path);
+    result = ShellLaunchAndAttach(codex_path, dll_path, &launched_pid);
   }
   if (result == 0) {
     StartupInjectionSweep(codex_path, dll_path, launched_pid);

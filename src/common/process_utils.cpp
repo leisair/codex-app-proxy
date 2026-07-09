@@ -24,11 +24,6 @@ std::wstring GetEnvVar(const wchar_t* name) {
   return value;
 }
 
-bool IsCodexProcessName(const std::wstring& name) {
-  std::wstring lower = ToLower(GetBaseName(name));
-  return lower == L"codex.exe";
-}
-
 bool IsCodexAppProcessName(const std::wstring& name) {
   std::wstring lower = ToLower(GetBaseName(name));
   return lower == L"codex.exe";
@@ -129,26 +124,6 @@ bool DirectoryExists(const std::wstring& path) {
   return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
-bool AnyCodexProcessRunning() {
-  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-  if (snapshot == INVALID_HANDLE_VALUE) {
-    return false;
-  }
-  PROCESSENTRY32W entry{};
-  entry.dwSize = sizeof(entry);
-  bool found = false;
-  if (Process32FirstW(snapshot, &entry)) {
-    do {
-      if (IsCodexProcessName(entry.szExeFile)) {
-        found = true;
-        break;
-      }
-    } while (Process32NextW(snapshot, &entry));
-  }
-  CloseHandle(snapshot);
-  return found;
-}
-
 std::wstring FindCodexAppPath() {
   wchar_t found[MAX_PATH]{};
   if (SearchPathW(nullptr, L"codex.exe", nullptr, MAX_PATH, found, nullptr) > 0) {
@@ -238,6 +213,34 @@ DWORD FindNewestProcessIdByName(const std::wstring& process_name, DWORD after_pi
   }
   CloseHandle(snapshot);
   return best;
+}
+
+DWORD FindNewestProcessIdByPath(const std::wstring& process_path, DWORD after_pid) {
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE) {
+    return 0;
+  }
+  std::wstring target = ToLower(process_path);
+  DWORD best = 0;
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  if (Process32FirstW(snapshot, &entry)) {
+    do {
+      if (entry.th32ProcessID <= after_pid || entry.th32ProcessID <= best) {
+        continue;
+      }
+      std::wstring path = QueryProcessImagePath(entry.th32ProcessID);
+      if (ToLower(path) == target) {
+        best = entry.th32ProcessID;
+      }
+    } while (Process32NextW(snapshot, &entry));
+  }
+  CloseHandle(snapshot);
+  return best;
+}
+
+bool AnyProcessRunningAtPath(const std::wstring& process_path) {
+  return FindNewestProcessIdByPath(process_path) != 0;
 }
 
 std::vector<ProcessInfo> EnumerateCodexAppProcesses(const std::wstring& app_dir) {

@@ -15,6 +15,9 @@ This is an early v1 implementation. It is intentionally scoped to Codex:
 - Allowed process names are `Codex.exe` and `codex.exe` by default.
 - No service, no tray process, no auto-start, and no global proxy changes.
 - Localhost and private network destinations are bypassed by default.
+- The launcher only treats the desktop app executable as an already-running
+  app. A standalone terminal `codex.exe` process does not block desktop launch
+  and is not injected unless it is a child of the launched desktop app.
 
 ## Build
 
