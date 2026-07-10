@@ -25,5 +25,6 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
 Copy-Item -Force (Join-Path $build "$Config\CodexProxyLauncher.exe") $output
 Copy-Item -Force (Join-Path $root "resources\config-web.html") $output
 Copy-Item -Force (Join-Path $root "resources\default_config.json") (Join-Path $output "config.json")
+Copy-Item -Force (Join-Path $root "README.md") $output
 
 Write-Host "Output written to $output"

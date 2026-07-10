@@ -37,9 +37,11 @@ jobs:
           Copy-Item -Force build\Release\CodexProxyLauncher.exe out\
           Copy-Item -Force resources\config-web.html out\
           Copy-Item -Force resources\default_config.json out\config.json
+          Copy-Item -Force README.md out\
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: codex-app-proxy-windows-x64
-          path: out/**
+          path: out/*
+          if-no-files-found: error

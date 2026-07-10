@@ -7,6 +7,7 @@
 #include <fstream>
 #include <regex>
 #include <sstream>
+#include <system_error>
 #include <windows.h>
 
 namespace codex_proxy {
@@ -23,7 +24,11 @@ std::string ReadFileUtf8(const std::wstring& path) {
 }
 
 bool WriteFileUtf8(const std::wstring& path, const std::string& content) {
-  std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+  std::error_code ec;
+  std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+  if (ec) {
+    return false;
+  }
   std::ofstream file(path, std::ios::binary | std::ios::trunc);
   if (!file) {
     return false;
@@ -98,7 +103,11 @@ bool ExtractInt(const std::string& json, const std::string& key, int* out) {
   if (!std::regex_search(json, match, re)) {
     return false;
   }
-  *out = std::stoi(match[1].str());
+  try {
+    *out = std::stoi(match[1].str());
+  } catch (...) {
+    return false;
+  }
   return true;
 }
 
@@ -159,7 +168,7 @@ AppConfig DefaultConfig() {
 }
 
 std::wstring DefaultConfigDir() {
-  return GetUserProfileDir() + L"\\.codex-proxy";
+  return GetExecutableDir();
 }
 
 std::wstring DefaultConfigPath() {
@@ -209,17 +218,48 @@ bool SaveConfig(const std::wstring& path, const AppConfig& config, std::wstring*
 }
 
 bool EnsureDefaultConfig(const std::wstring& path, std::wstring* error) {
-  if (std::filesystem::exists(path)) {
+  std::error_code ec;
+  if (std::filesystem::exists(path, ec)) {
     return true;
   }
+  if (ec) {
+    if (error) {
+      *error = L"Unable to access config path: " + path;
+    }
+    return false;
+  }
   return SaveConfig(path, DefaultConfig(), error);
+}
+
+bool ValidateConfig(const AppConfig& config, std::wstring* error) {
+  if (Trim(config.proxy.host).empty()) {
+    if (error) {
+      *error = L"proxy.host must not be empty";
+    }
+    return false;
+  }
+  if (config.proxy.port == 0) {
+    if (error) {
+      *error = L"proxy.port must be between 1 and 65535";
+    }
+    return false;
+  }
+  if (config.bypass_list.empty()) {
+    if (error) {
+      *error = L"bypass_list must contain at least one entry";
+    }
+    return false;
+  }
+  return true;
 }
 
 bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error) {
   if (!config) {
     return false;
   }
-  EnsureDefaultConfig(path, error);
+  if (!EnsureDefaultConfig(path, error)) {
+    return false;
+  }
   std::string json = ReadFileUtf8(path);
   if (json.empty()) {
     if (error) {
@@ -234,27 +274,55 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
   bool bool_value = false;
 
   std::string proxy = ExtractObject(json, "proxy");
-  if (!proxy.empty()) {
-    if (ExtractString(proxy, "type", &value)) {
-      parsed.proxy.type = ProxyTypeFromString(value);
+  if (proxy.empty()) {
+    if (error) {
+      *error = L"Missing or invalid proxy object";
     }
-    if (ExtractString(proxy, "host", &value)) {
-      parsed.proxy.host = Trim(value);
-    }
-    if (ExtractInt(proxy, "port", &int_value) && int_value > 0 && int_value <= 65535) {
-      parsed.proxy.port = static_cast<uint16_t>(int_value);
-    }
+    return false;
   }
+  if (!ExtractString(proxy, "type", &value) ||
+      (ToLower(Trim(value)) != "http" && ToLower(Trim(value)) != "socks5")) {
+    if (error) {
+      *error = L"proxy.type must be http or socks5";
+    }
+    return false;
+  }
+  parsed.proxy.type = ProxyTypeFromString(value);
+  if (!ExtractString(proxy, "host", &value) || Trim(value).empty()) {
+    if (error) {
+      *error = L"proxy.host must not be empty";
+    }
+    return false;
+  }
+  parsed.proxy.host = Trim(value);
+  if (!ExtractInt(proxy, "port", &int_value) || int_value < 1 || int_value > 65535) {
+    if (error) {
+      *error = L"proxy.port must be between 1 and 65535";
+    }
+    return false;
+  }
+  parsed.proxy.port = static_cast<uint16_t>(int_value);
 
   auto bypass_list = ExtractStringArray(json, "bypass_list");
-  if (!bypass_list.empty()) {
-    parsed.bypass_list = bypass_list;
+  if (bypass_list.empty()) {
+    if (error) {
+      *error = L"bypass_list must contain at least one entry";
+    }
+    return false;
   }
+  parsed.bypass_list = bypass_list;
 
-  if (ExtractBool(json, "disable_quic", &bool_value)) {
-    parsed.disable_quic = bool_value;
+  if (!ExtractBool(json, "disable_quic", &bool_value)) {
+    if (error) {
+      *error = L"disable_quic must be true or false";
+    }
+    return false;
   }
+  parsed.disable_quic = bool_value;
 
+  if (!ValidateConfig(parsed, error)) {
+    return false;
+  }
   *config = parsed;
   return true;
 }

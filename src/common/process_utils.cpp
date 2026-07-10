@@ -12,19 +12,6 @@
 namespace codex_proxy {
 namespace {
 
-std::wstring GetEnvVar(const wchar_t* name) {
-  DWORD size = GetEnvironmentVariableW(name, nullptr, 0);
-  if (size == 0) {
-    return {};
-  }
-  std::wstring value(size, L'\0');
-  GetEnvironmentVariableW(name, value.data(), size);
-  if (!value.empty() && value.back() == L'\0') {
-    value.pop_back();
-  }
-  return value;
-}
-
 std::wstring NormalizeComparablePath(std::wstring path) {
   std::replace(path.begin(), path.end(), L'/', L'\\');
   if (path.rfind(L"\\\\?\\", 0) == 0) {
@@ -137,32 +124,6 @@ std::vector<std::wstring> FindPackagedCandidates(const wchar_t* package_family) 
   return candidates;
 }
 
-DWORD FindNewestProcessIdByPath(const std::wstring& process_path) {
-  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-  if (snapshot == INVALID_HANDLE_VALUE) {
-    return 0;
-  }
-
-  std::wstring target = NormalizeComparablePath(process_path);
-  DWORD best = 0;
-  PROCESSENTRY32W entry{};
-  entry.dwSize = sizeof(entry);
-  if (Process32FirstW(snapshot, &entry)) {
-    do {
-      if (entry.th32ProcessID <= best) {
-        continue;
-      }
-      std::wstring path = QueryProcessImagePath(entry.th32ProcessID);
-      if (NormalizeComparablePath(path) == target) {
-        best = entry.th32ProcessID;
-      }
-    } while (Process32NextW(snapshot, &entry));
-  }
-
-  CloseHandle(snapshot);
-  return best;
-}
-
 std::wstring PreferredAppExecutable(std::vector<std::wstring> candidates) {
   if (candidates.empty()) {
     return {};
@@ -178,14 +139,25 @@ std::wstring PreferredAppExecutable(std::vector<std::wstring> candidates) {
 
 }  // namespace
 
-std::wstring GetUserProfileDir() {
-  std::wstring value = GetEnvVar(L"USERPROFILE");
-  return value.empty() ? L"." : value;
+std::wstring GetExecutablePath() {
+  std::wstring path(MAX_PATH, L'\0');
+  for (;;) {
+    DWORD size = GetModuleFileNameW(nullptr, path.data(),
+                                    static_cast<DWORD>(path.size()));
+    if (size == 0) {
+      return {};
+    }
+    if (size < path.size() - 1) {
+      path.resize(size);
+      return path;
+    }
+    path.resize(path.size() * 2);
+  }
 }
 
-std::wstring GetLocalAppDataDir() {
-  std::wstring value = GetEnvVar(L"LOCALAPPDATA");
-  return value.empty() ? GetUserProfileDir() + L"\\AppData\\Local" : value;
+std::wstring GetExecutableDir() {
+  std::wstring path = GetExecutablePath();
+  return path.empty() ? L"." : GetDirName(path);
 }
 
 std::wstring GetBaseName(const std::wstring& path) {
@@ -199,11 +171,6 @@ std::wstring GetDirName(const std::wstring& path) {
 bool FileExists(const std::wstring& path) {
   DWORD attrs = GetFileAttributesW(path.c_str());
   return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
-}
-
-bool DirectoryExists(const std::wstring& path) {
-  DWORD attrs = GetFileAttributesW(path.c_str());
-  return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
 std::wstring FindCodexAppPath() {
@@ -243,8 +210,33 @@ std::wstring FindCodexAppPath() {
   return {};
 }
 
-bool AnyProcessRunningAtPath(const std::wstring& process_path) {
-  return FindNewestProcessIdByPath(process_path) != 0;
+bool AnyDesktopAppProcessRunning(const std::wstring& app_path) {
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+
+  const std::wstring app_dir = NormalizeComparablePath(GetDirName(app_path));
+  bool found = false;
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  if (Process32FirstW(snapshot, &entry)) {
+    do {
+      std::wstring image_path = QueryProcessImagePath(entry.th32ProcessID);
+      if (image_path.empty()) {
+        continue;
+      }
+      const std::wstring name = ToLower(GetBaseName(image_path));
+      if ((name == L"chatgpt.exe" || name == L"codex.exe") &&
+          NormalizeComparablePath(GetDirName(image_path)) == app_dir) {
+        found = true;
+        break;
+      }
+    } while (Process32NextW(snapshot, &entry));
+  }
+
+  CloseHandle(snapshot);
+  return found;
 }
 
 }  // namespace codex_proxy

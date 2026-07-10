@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <system_error>
 #include <windows.h>
 
 namespace codex_proxy {
@@ -40,8 +41,9 @@ Logger& Logger::Instance() {
 void Logger::Init(const std::wstring& component) {
   std::lock_guard<std::mutex> lock(mutex_);
   component_ = component;
-  std::wstring dir = GetLocalAppDataDir() + L"\\CodexProxy\\logs";
-  std::filesystem::create_directories(dir);
+  std::wstring dir = GetExecutableDir() + L"\\logs";
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
   log_path_ = dir + L"\\proxy-" + CurrentDate() + L".log";
 }
 
@@ -65,8 +67,9 @@ std::wstring Logger::LogPath() const {
 void Logger::Write(const wchar_t* level, const std::wstring& message) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (log_path_.empty()) {
-    std::wstring dir = GetLocalAppDataDir() + L"\\CodexProxy\\logs";
-    std::filesystem::create_directories(dir);
+    std::wstring dir = GetExecutableDir() + L"\\logs";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
     log_path_ = dir + L"\\proxy-" + CurrentDate() + L".log";
   }
   std::wofstream file(log_path_, std::ios::app);

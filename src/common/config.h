@@ -36,6 +36,7 @@ std::string SerializeConfig(const AppConfig& config);
 bool EnsureDefaultConfig(const std::wstring& path, std::wstring* error);
 bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error);
 bool SaveConfig(const std::wstring& path, const AppConfig& config, std::wstring* error);
+bool ValidateConfig(const AppConfig& config, std::wstring* error);
 std::string ProxyTypeToString(ProxyType type);
 ProxyType ProxyTypeFromString(const std::string& value);
 

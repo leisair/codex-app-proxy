@@ -3,27 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChatGPT/Codex Proxy Launcher Config</title>
+  <title>ChatGPT/Codex 代理配置</title>
   <style>
     :root {
       color-scheme: light dark;
-      --bg: #f6f7f9;
-      --fg: #1c2026;
-      --muted: #606875;
-      --line: #d8dde6;
-      --panel: #ffffff;
-      --accent: #0b6bcb;
+      --bg: #f4f6f8;
+      --fg: #18202a;
+      --muted: #5d6876;
+      --line: #d4dae2;
+      --panel: #fff;
+      --accent: #0969da;
+      --accent-hover: #075bbd;
+      --ok: #18794e;
       --bad: #b42318;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #111418;
-        --fg: #e8ecf1;
-        --muted: #9aa4b2;
-        --line: #2d3440;
-        --panel: #181d24;
-        --accent: #58a6ff;
-        --bad: #ff8a80;
+        --bg: #101418;
+        --fg: #e6edf3;
+        --muted: #9da7b3;
+        --line: #303842;
+        --panel: #171c22;
+        --accent: #2f81f7;
+        --accent-hover: #388bfd;
+        --ok: #56d364;
+        --bad: #ff7b72;
       }
     }
     * { box-sizing: border-box; }
@@ -34,14 +38,17 @@
       color: var(--fg);
     }
     main {
-      width: min(1100px, calc(100vw - 32px));
+      width: min(1080px, calc(100vw - 32px));
       margin: 24px auto;
       display: grid;
-      grid-template-columns: 1fr 400px;
+      grid-template-columns: minmax(0, 1fr) 390px;
       gap: 18px;
+      align-items: start;
     }
-    h1 { font-size: 22px; margin: 0 0 8px; }
-    h2 { font-size: 15px; margin: 0 0 12px; }
+    h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: 0; }
+    h2 { margin: 0 0 12px; font-size: 15px; letter-spacing: 0; }
+    p { line-height: 1.55; }
+    .lead { margin: 0 0 18px; color: var(--muted); }
     section {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -60,13 +67,15 @@
       font: inherit;
       border-radius: 6px;
       border: 1px solid var(--line);
-      padding: 8px 10px;
+      padding: 9px 10px;
       background: transparent;
       color: var(--fg);
     }
+    select, input { min-width: 0; width: 100%; }
     textarea {
       width: 100%;
-      min-height: 320px;
+      min-width: 0;
+      min-height: 250px;
       resize: vertical;
       font-family: Consolas, "SFMono-Regular", monospace;
       font-size: 12px;
@@ -74,40 +83,56 @@
     button {
       cursor: pointer;
       background: var(--accent);
-      color: white;
+      color: #fff;
       border-color: var(--accent);
+      font-weight: 600;
     }
-    .ghost {
-      background: transparent;
-      color: var(--fg);
-      border-color: var(--line);
-    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: transparent; color: var(--fg); border-color: var(--line); }
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .status { color: var(--muted); font-size: 13px; min-height: 20px; }
+    .hint, .status { color: var(--muted); font-size: 13px; }
+    .status { min-height: 20px; margin: 10px 0 0; }
+    .status.ok { color: var(--ok); }
     .status.bad { color: var(--bad); }
     code {
       display: block;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 12px;
       color: var(--muted);
       overflow: auto;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 12px;
     }
+    .steps { margin: 0; padding-left: 22px; color: var(--muted); line-height: 1.75; }
+    .side { position: sticky; top: 18px; min-width: 0; }
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr; }
+      .side { position: static; }
     }
   </style>
 </head>
 <body>
   <main>
     <div>
-      <h1>ChatGPT/Codex Proxy Launcher Config</h1>
+      <h1>ChatGPT/Codex 代理配置</h1>
+      <p class="lead">选择本地代理预设，保存配置，然后双击启动器。</p>
 
       <section>
-        <h2>代理</h2>
-        <div class="grid">
+        <h2>1. 选择代理</h2>
+        <label>常见代理软件
+          <select id="preset">
+            <option value="v2rayn">V2RayN（mixed 10808）</option>
+            <option value="clash-verge">Clash Verge Rev（mixed 7897）</option>
+            <option value="clash-mihomo">Clash / Mihomo（mixed 7890）</option>
+            <option value="socks5">通用 SOCKS5（1080）</option>
+            <option value="custom">自定义</option>
+          </select>
+        </label>
+        <div class="grid" style="margin-top:12px;">
           <label>协议
             <select id="proxyType">
               <option value="http">HTTP / mixed</option>
@@ -121,42 +146,46 @@
             <input id="proxyPort" type="number" min="1" max="65535" value="10808">
           </label>
         </div>
-        <p class="status">V2RayN mixed 端口通常使用 HTTP / mixed + 127.0.0.1:10808。</p>
+        <p class="hint">默认端口可以被修改，请以代理软件当前显示的本地或 mixed 监听端口为准。</p>
       </section>
 
       <section>
-        <h2>启动参数</h2>
-        <label>Chromium proxy bypass list，每行一条
-          <textarea id="bypassList"></textarea>
-        </label>
-        <label class="check" style="margin-top:12px;">
-          <input id="disableQuic" type="checkbox" checked>
-          启动 ChatGPT/Codex 时加入 --disable-quic
-        </label>
-      </section>
-
-      <section>
-        <h2>操作</h2>
-        <div class="row">
-          <button id="preset">V2RayN 10808 预设</button>
-          <button id="download">导出 config.json</button>
-          <button class="ghost" id="copy">复制 JSON</button>
-          <label class="ghost" style="display:inline-flex;align-items:center;gap:8px;">
-            导入 JSON <input id="importFile" type="file" accept="application/json,.json" hidden>
+        <h2>2. 保存配置</h2>
+        <ol class="steps">
+          <li>点击“保存 config.json”。</li>
+          <li>选择 CodexProxyLauncher.exe 所在文件夹。</li>
+          <li>覆盖文件夹中原来的 config.json。</li>
+        </ol>
+        <div class="row" style="margin-top:14px;">
+          <button id="save">保存 config.json</button>
+          <button class="secondary" id="download">普通下载</button>
+          <label class="secondary" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+            导入现有配置 <input id="importFile" type="file" accept="application/json,.json" hidden>
           </label>
         </div>
         <p id="status" class="status"></p>
       </section>
 
       <section>
-        <h2>等价验证命令</h2>
-        <code>& (Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\ChatGPT.exe") --proxy-server="http://127.0.0.1:10808" --proxy-bypass-list="&lt;-loopback&gt;;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*" --disable-quic</code>
+        <h2>高级设置</h2>
+        <label>Chromium proxy bypass list，每行一条
+          <textarea id="bypassList"></textarea>
+        </label>
+        <label class="check" style="margin-top:12px;">
+          <input id="disableQuic" type="checkbox" checked style="width:auto;">
+          禁用 QUIC，避免 UDP 流量绕过本地 TCP 代理
+        </label>
+      </section>
+
+      <section>
+        <h2>等价 PowerShell 命令</h2>
+        <code id="command"></code>
       </section>
     </div>
 
-    <section>
-      <h2>config.json</h2>
-      <textarea id="json" spellcheck="false"></textarea>
+    <section class="side">
+      <h2>即将保存的 config.json</h2>
+      <textarea id="json" spellcheck="false" readonly></textarea>
     </section>
   </main>
 
@@ -169,6 +198,12 @@
       '172.25.*', '172.26.*', '172.27.*', '172.28.*', '172.29.*',
       '172.30.*', '172.31.*', '192.168.*'
     ];
+    const presets = {
+      v2rayn: { type: 'http', host: '127.0.0.1', port: 10808 },
+      'clash-verge': { type: 'http', host: '127.0.0.1', port: 7897 },
+      'clash-mihomo': { type: 'http', host: '127.0.0.1', port: 7890 },
+      socks5: { type: 'socks5', host: '127.0.0.1', port: 1080 }
+    };
 
     function parseLines(value) {
       return value.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
@@ -180,8 +215,8 @@
         _version: 1,
         proxy: {
           type: $('proxyType').value,
-          host: $('proxyHost').value.trim() || '127.0.0.1',
-          port: Number($('proxyPort').value || 10808)
+          host: $('proxyHost').value.trim(),
+          port: Number($('proxyPort').value)
         },
         bypass_list: parseLines($('bypassList').value),
         disable_quic: $('disableQuic').checked
@@ -192,16 +227,26 @@
       if (!['http', 'socks5'].includes(config.proxy.type)) return '代理协议必须是 http 或 socks5';
       if (!config.proxy.host) return '代理地址不能为空';
       if (!Number.isInteger(config.proxy.port) || config.proxy.port < 1 || config.proxy.port > 65535) return '代理端口必须是 1-65535';
-      if (!config.bypass_list.length) return '至少保留 localhost / 内网 bypass，避免本地连接被代理';
+      if (!config.bypass_list.length) return 'bypass list 至少需要保留一项';
       return '';
     }
 
-    function refreshJson() {
+    function buildCommand(config) {
+      const proxy = `${config.proxy.type}://${config.proxy.host}:${config.proxy.port}`;
+      const bypass = config.bypass_list.join(';');
+      let command = `& (Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\\ChatGPT.exe") --proxy-server="${proxy}"`;
+      if (bypass) command += ` --proxy-bypass-list="${bypass}"`;
+      if (config.disable_quic) command += ' --disable-quic';
+      return command;
+    }
+
+    function refresh() {
       const config = buildConfig();
       $('json').value = JSON.stringify(config, null, 2);
+      $('command').textContent = buildCommand(config);
       const error = validate(config);
-      $('status').textContent = error || '配置有效';
-      $('status').className = error ? 'status bad' : 'status';
+      $('status').textContent = error || '配置有效，可以保存。';
+      $('status').className = error ? 'status bad' : 'status ok';
     }
 
     function applyConfig(config) {
@@ -210,53 +255,90 @@
       $('proxyPort').value = config.proxy?.port || 10808;
       $('bypassList').value = (config.bypass_list || defaultBypass).join('\n');
       $('disableQuic').checked = config.disable_quic !== false;
-      refreshJson();
+      refresh();
     }
 
-    document.querySelectorAll('input,select,textarea').forEach(el => {
-      el.addEventListener('input', refreshJson);
-    });
-    $('preset').addEventListener('click', () => {
-      applyConfig({
-        proxy: { type: 'http', host: '127.0.0.1', port: 10808 },
-        bypass_list: defaultBypass,
-        disable_quic: true
-      });
-    });
-    $('download').addEventListener('click', () => {
+    function configText() {
       const config = buildConfig();
       const error = validate(config);
-      if (error) {
-        $('status').textContent = error;
+      if (error) throw new Error(error);
+      return JSON.stringify(config, null, 2) + '\n';
+    }
+
+    function downloadConfig() {
+      try {
+        const blob = new Blob([configText()], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'config.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        $('status').textContent = '已下载 config.json，请将它放到启动器所在文件夹。';
+        $('status').className = 'status ok';
+      } catch (error) {
+        $('status').textContent = error.message;
         $('status').className = 'status bad';
+      }
+    }
+
+    $('preset').addEventListener('change', () => {
+      const preset = presets[$('preset').value];
+      if (!preset) return;
+      $('proxyType').value = preset.type;
+      $('proxyHost').value = preset.host;
+      $('proxyPort').value = preset.port;
+      refresh();
+    });
+    ['proxyType', 'proxyHost', 'proxyPort'].forEach(id => {
+      $(id).addEventListener('input', () => {
+        $('preset').value = 'custom';
+        refresh();
+      });
+    });
+    ['bypassList', 'disableQuic'].forEach(id => $(id).addEventListener('input', refresh));
+    $('save').addEventListener('click', async () => {
+      if (!window.showSaveFilePicker) {
+        downloadConfig();
         return;
       }
-      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'config.json';
-      a.click();
-      URL.revokeObjectURL(url);
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: 'config.json',
+          types: [{ description: 'JSON 配置', accept: { 'application/json': ['.json'] } }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(configText());
+        await writable.close();
+        $('status').textContent = 'config.json 已保存。现在可以双击启动器。';
+        $('status').className = 'status ok';
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          $('status').textContent = `保存失败：${error.message}`;
+          $('status').className = 'status bad';
+        }
+      }
     });
-    $('copy').addEventListener('click', async () => {
-      await navigator.clipboard.writeText($('json').value);
-      $('status').textContent = '已复制 JSON';
-    });
+    $('download').addEventListener('click', downloadConfig);
     $('importFile').addEventListener('change', async (event) => {
       const file = event.target.files[0];
       if (!file) return;
       try {
-        applyConfig(JSON.parse(await file.text()));
-        $('status').textContent = '导入成功';
-      } catch {
-        $('status').textContent = '导入失败：JSON 无效';
+        const config = JSON.parse(await file.text());
+        const error = validate(config);
+        if (error) throw new Error(error);
+        applyConfig(config);
+        $('preset').value = 'custom';
+        $('status').textContent = '配置导入成功。';
+        $('status').className = 'status ok';
+      } catch (error) {
+        $('status').textContent = `导入失败：${error.message}`;
         $('status').className = 'status bad';
       }
     });
 
     applyConfig({
-      proxy: { type: 'http', host: '127.0.0.1', port: 10808 },
+      proxy: presets.v2rayn,
       bypass_list: defaultBypass,
       disable_quic: true
     });

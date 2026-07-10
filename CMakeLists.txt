@@ -18,11 +18,14 @@ endif()
 
 add_library(codex_proxy_common STATIC
   src/common/config.cpp
+  src/common/launch_args.cpp
   src/common/logging.cpp
+  src/common/network_utils.cpp
   src/common/process_utils.cpp
   src/common/string_utils.cpp
 )
 target_include_directories(codex_proxy_common PUBLIC src)
+target_link_libraries(codex_proxy_common PUBLIC ws2_32)
 
 add_executable(CodexProxyLauncher
   src/launcher/main.cpp
@@ -39,4 +42,4 @@ if(CODEX_PROXY_BUILD_TESTS)
 endif()
 
 install(TARGETS CodexProxyLauncher RUNTIME DESTINATION .)
-install(FILES resources/config-web.html resources/default_config.json DESTINATION .)
+install(FILES resources/config-web.html resources/default_config.json README.md DESTINATION .)
