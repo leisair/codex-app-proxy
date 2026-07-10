@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Codex Proxy Launcher Config</title>
+  <title>ChatGPT/Codex Proxy Launcher Config</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -103,7 +103,7 @@
 <body>
   <main>
     <div>
-      <h1>Codex Proxy Launcher Config</h1>
+      <h1>ChatGPT/Codex Proxy Launcher Config</h1>
 
       <section>
         <h2>代理</h2>
@@ -131,11 +131,7 @@
         </label>
         <label class="check" style="margin-top:12px;">
           <input id="disableQuic" type="checkbox" checked>
-          启动 Codex 时加入 --disable-quic
-        </label>
-        <label class="check" style="margin-top:8px;">
-          <input id="setProxyEnvironment" type="checkbox">
-          同时给 Codex 进程设置 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY
+          启动 ChatGPT/Codex 时加入 --disable-quic
         </label>
       </section>
 
@@ -154,8 +150,7 @@
 
       <section>
         <h2>等价验证命令</h2>
-        <code>$codex = Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\Codex.exe"
-& $codex --proxy-server="http://127.0.0.1:10808" --proxy-bypass-list="&lt;-loopback&gt;;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*" --disable-quic</code>
+        <code>& (Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\ChatGPT.exe") --proxy-server="http://127.0.0.1:10808" --proxy-bypass-list="&lt;-loopback&gt;;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*" --disable-quic</code>
       </section>
     </div>
 
@@ -181,17 +176,15 @@
 
     function buildConfig() {
       return {
-        _comment: 'Codex Proxy Launcher configuration',
+        _comment: 'ChatGPT/Codex Proxy Launcher configuration',
         _version: 1,
-        log_level: 'info',
         proxy: {
           type: $('proxyType').value,
           host: $('proxyHost').value.trim() || '127.0.0.1',
           port: Number($('proxyPort').value || 10808)
         },
         bypass_list: parseLines($('bypassList').value),
-        disable_quic: $('disableQuic').checked,
-        set_proxy_environment: $('setProxyEnvironment').checked
+        disable_quic: $('disableQuic').checked
       };
     }
 
@@ -217,7 +210,6 @@
       $('proxyPort').value = config.proxy?.port || 10808;
       $('bypassList').value = (config.bypass_list || defaultBypass).join('\n');
       $('disableQuic').checked = config.disable_quic !== false;
-      $('setProxyEnvironment').checked = !!config.set_proxy_environment;
       refreshJson();
     }
 
@@ -228,8 +220,7 @@
       applyConfig({
         proxy: { type: 'http', host: '127.0.0.1', port: 10808 },
         bypass_list: defaultBypass,
-        disable_quic: true,
-        set_proxy_environment: false
+        disable_quic: true
       });
     });
     $('download').addEventListener('click', () => {
@@ -267,8 +258,7 @@
     applyConfig({
       proxy: { type: 'http', host: '127.0.0.1', port: 10808 },
       bypass_list: defaultBypass,
-      disable_quic: true,
-      set_proxy_environment: false
+      disable_quic: true
     });
   </script>
 </body>

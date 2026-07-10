@@ -178,9 +178,8 @@ ProxyType ProxyTypeFromString(const std::string& value) {
 std::string SerializeConfig(const AppConfig& config) {
   std::ostringstream out;
   out << "{\n";
-  out << "  \"_comment\": \"Codex Proxy Launcher configuration\",\n";
+  out << "  \"_comment\": \"ChatGPT/Codex Proxy Launcher configuration\",\n";
   out << "  \"_version\": " << config.version << ",\n";
-  out << "  \"log_level\": \"" << JsonEscape(config.log_level) << "\",\n";
   out << "  \"proxy\": {\n";
   out << "    \"type\": \"" << ProxyTypeToString(config.proxy.type) << "\",\n";
   out << "    \"host\": \"" << JsonEscape(config.proxy.host) << "\",\n";
@@ -194,9 +193,7 @@ std::string SerializeConfig(const AppConfig& config) {
     out << "\"" << JsonEscape(config.bypass_list[i]) << "\"";
   }
   out << "],\n";
-  out << "  \"disable_quic\": " << (config.disable_quic ? "true" : "false") << ",\n";
-  out << "  \"set_proxy_environment\": "
-      << (config.set_proxy_environment ? "true" : "false") << "\n";
+  out << "  \"disable_quic\": " << (config.disable_quic ? "true" : "false") << "\n";
   out << "}\n";
   return out.str();
 }
@@ -236,10 +233,6 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
   int int_value = 0;
   bool bool_value = false;
 
-  if (ExtractString(json, "log_level", &value)) {
-    parsed.log_level = ToLower(Trim(value));
-  }
-
   std::string proxy = ExtractObject(json, "proxy");
   if (!proxy.empty()) {
     if (ExtractString(proxy, "type", &value)) {
@@ -260,9 +253,6 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
 
   if (ExtractBool(json, "disable_quic", &bool_value)) {
     parsed.disable_quic = bool_value;
-  }
-  if (ExtractBool(json, "set_proxy_environment", &bool_value)) {
-    parsed.set_proxy_environment = bool_value;
   }
 
   *config = parsed;

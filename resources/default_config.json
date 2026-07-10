@@ -1,7 +1,6 @@
 {
-  "_comment": "Codex Proxy Launcher configuration",
+  "_comment": "ChatGPT/Codex Proxy Launcher configuration",
   "_version": 1,
-  "log_level": "info",
   "proxy": {
     "type": "http",
     "host": "127.0.0.1",
@@ -31,6 +30,5 @@
     "172.31.*",
     "192.168.*"
   ],
-  "disable_quic": true,
-  "set_proxy_environment": false
+  "disable_quic": true
 }

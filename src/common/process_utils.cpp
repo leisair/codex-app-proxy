@@ -57,10 +57,24 @@ std::wstring QueryProcessImagePath(DWORD pid) {
   return path;
 }
 
-std::vector<std::wstring> FindWindowsAppsCodexCandidates() {
+void AddAppExecutables(const std::wstring& app_dir, std::vector<std::wstring>* candidates) {
+  if (!candidates) {
+    return;
+  }
+  const wchar_t* exe_names[] = {L"ChatGPT.exe", L"Codex.exe"};
+  for (const wchar_t* exe_name : exe_names) {
+    std::wstring candidate = app_dir + L"\\" + exe_name;
+    if (FileExists(candidate)) {
+      candidates->push_back(candidate);
+    }
+  }
+}
+
+std::vector<std::wstring> FindWindowsAppsCandidates(const std::wstring& package_pattern) {
   std::vector<std::wstring> candidates;
   WIN32_FIND_DATAW data{};
-  HANDLE find = FindFirstFileW(L"C:\\Program Files\\WindowsApps\\OpenAI.Codex_*", &data);
+  std::wstring pattern = L"C:\\Program Files\\WindowsApps\\" + package_pattern;
+  HANDLE find = FindFirstFileW(pattern.c_str(), &data);
   if (find == INVALID_HANDLE_VALUE) {
     return candidates;
   }
@@ -69,10 +83,8 @@ std::vector<std::wstring> FindWindowsAppsCodexCandidates() {
     if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
       std::wstring path = L"C:\\Program Files\\WindowsApps\\";
       path += data.cFileName;
-      path += L"\\app\\Codex.exe";
-      if (FileExists(path)) {
-        candidates.push_back(path);
-      }
+      path += L"\\app";
+      AddAppExecutables(path, &candidates);
     }
   } while (FindNextFileW(find, &data));
 
@@ -81,12 +93,12 @@ std::vector<std::wstring> FindWindowsAppsCodexCandidates() {
   return candidates;
 }
 
-std::vector<std::wstring> FindPackagedCodexCandidates() {
+std::vector<std::wstring> FindPackagedCandidates(const wchar_t* package_family) {
   std::vector<std::wstring> candidates;
   UINT32 count = 0;
   UINT32 buffer_length = 0;
-  LONG rc = GetPackagesByPackageFamily(L"OpenAI.Codex_2p2nqsd0c76g0", &count,
-                                       nullptr, &buffer_length, nullptr);
+  LONG rc = GetPackagesByPackageFamily(package_family, &count, nullptr,
+                                       &buffer_length, nullptr);
   if (rc != ERROR_INSUFFICIENT_BUFFER && rc != ERROR_SUCCESS) {
     return candidates;
   }
@@ -96,9 +108,8 @@ std::vector<std::wstring> FindPackagedCodexCandidates() {
 
   std::vector<PWSTR> package_names(count);
   std::vector<WCHAR> package_buffer(buffer_length);
-  rc = GetPackagesByPackageFamily(L"OpenAI.Codex_2p2nqsd0c76g0", &count,
-                                  package_names.data(), &buffer_length,
-                                  package_buffer.data());
+  rc = GetPackagesByPackageFamily(package_family, &count, package_names.data(),
+                                  &buffer_length, package_buffer.data());
   if (rc != ERROR_SUCCESS) {
     return candidates;
   }
@@ -119,10 +130,7 @@ std::vector<std::wstring> FindPackagedCodexCandidates() {
       package_path.pop_back();
     }
 
-    std::wstring candidate = package_path + L"\\app\\Codex.exe";
-    if (FileExists(candidate)) {
-      candidates.push_back(candidate);
-    }
+    AddAppExecutables(package_path + L"\\app", &candidates);
   }
 
   std::sort(candidates.begin(), candidates.end());
@@ -153,6 +161,19 @@ DWORD FindNewestProcessIdByPath(const std::wstring& process_path) {
 
   CloseHandle(snapshot);
   return best;
+}
+
+std::wstring PreferredAppExecutable(std::vector<std::wstring> candidates) {
+  if (candidates.empty()) {
+    return {};
+  }
+  std::sort(candidates.begin(), candidates.end());
+  for (auto it = candidates.rbegin(); it != candidates.rend(); ++it) {
+    if (ToLower(GetBaseName(*it)) == L"chatgpt.exe") {
+      return *it;
+    }
+  }
+  return candidates.back();
 }
 
 }  // namespace
@@ -187,22 +208,36 @@ bool DirectoryExists(const std::wstring& path) {
 
 std::wstring FindCodexAppPath() {
   wchar_t found[MAX_PATH]{};
-  if (SearchPathW(nullptr, L"codex.exe", nullptr, MAX_PATH, found, nullptr) > 0) {
-    std::filesystem::path resource_path(found);
-    std::filesystem::path maybe_app = resource_path.parent_path().parent_path() / L"Codex.exe";
-    if (FileExists(maybe_app.wstring())) {
-      return maybe_app.wstring();
+  if (SearchPathW(nullptr, L"chatgpt.exe", nullptr, MAX_PATH, found, nullptr) > 0) {
+    std::filesystem::path app_path(found);
+    if (FileExists(app_path.wstring())) {
+      return app_path.wstring();
     }
   }
 
-  auto packaged_candidates = FindPackagedCodexCandidates();
-  if (!packaged_candidates.empty()) {
-    return packaged_candidates.back();
+  if (SearchPathW(nullptr, L"codex.exe", nullptr, MAX_PATH, found, nullptr) > 0) {
+    std::filesystem::path resource_path(found);
+    std::filesystem::path maybe_app_dir = resource_path.parent_path().parent_path();
+    const wchar_t* exe_names[] = {L"ChatGPT.exe", L"Codex.exe"};
+    for (const wchar_t* exe_name : exe_names) {
+      std::filesystem::path maybe_app = maybe_app_dir / exe_name;
+      if (FileExists(maybe_app.wstring())) {
+        return maybe_app.wstring();
+      }
+    }
   }
 
-  auto windows_apps_candidates = FindWindowsAppsCodexCandidates();
+  auto packaged_candidates = FindPackagedCandidates(L"OpenAI.Codex_2p2nqsd0c76g0");
+  if (!packaged_candidates.empty()) {
+    return PreferredAppExecutable(packaged_candidates);
+  }
+
+  auto windows_apps_candidates = FindWindowsAppsCandidates(L"OpenAI.Codex_*");
+  auto chatgpt_candidates = FindWindowsAppsCandidates(L"OpenAI.ChatGPT_*");
+  windows_apps_candidates.insert(windows_apps_candidates.end(), chatgpt_candidates.begin(),
+                                 chatgpt_candidates.end());
   if (!windows_apps_candidates.empty()) {
-    return windows_apps_candidates.back();
+    return PreferredAppExecutable(windows_apps_candidates);
   }
 
   return {};

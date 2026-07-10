@@ -1,42 +1,42 @@
-# Codex Proxy Launcher
+# ChatGPT/Codex Proxy Launcher
 
-Windows-only per-app proxy launcher for the Codex desktop app.
+Windows-only per-app proxy launcher for the Microsoft Store ChatGPT desktop app
+that now contains Codex.
 
-This project packages the launch command that has proven to work for Codex
-desktop: start `Codex.exe` with Chromium proxy flags. It does not change the
-Windows system proxy, does not require TUN mode, and does not modify Codex
-process memory.
+The current Microsoft Store update may still use the package identity
+`OpenAI.Codex`, but the app directory contains the new `app\ChatGPT.exe` entry.
+This launcher starts that desktop app with Chromium proxy flags. It does not
+change the Windows system proxy, does not require TUN mode, and does not modify
+the app process.
 
 The default target is V2RayN mixed proxy on `127.0.0.1:10808`.
 
 ## What It Does
 
-- Locates the Microsoft Store Codex app executable.
-- Starts Codex with `--proxy-server=...`.
+- Locates the Microsoft Store app package.
+- Prefers `app\ChatGPT.exe`, then falls back to `app\Codex.exe`.
+- Starts the app with `--proxy-server=...`.
 - Adds a Chromium `--proxy-bypass-list=...` for localhost and private networks.
 - Adds `--disable-quic` by default.
-- Optionally sets `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` only for the
-  Codex process when `set_proxy_environment` is enabled.
 
 It is intentionally not a transparent proxy, system proxy manager, TUN tool,
-tray app, or background service.
+tray app, background service, or environment-variable shim.
 
 ## Equivalent Manual Command
 
-The launcher is equivalent to this PowerShell flow with default config:
+The launcher is equivalent to this PowerShell command with default config:
 
 ```powershell
-$codex = Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\Codex.exe"
-& $codex --proxy-server="http://127.0.0.1:10808" --proxy-bypass-list="<-loopback>;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*" --disable-quic
+& (Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\ChatGPT.exe") --proxy-server="http://127.0.0.1:10808" --proxy-bypass-list="<-loopback>;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*" --disable-quic
 ```
 
-The value of this project is making that command repeatable, configurable, and
-less error-prone.
+The value of this project is making that long command repeatable,
+configurable, and less error-prone.
 
 ## Use
 
 1. Keep V2RayN running with mixed port `127.0.0.1:10808`.
-2. Close existing Codex desktop app processes.
+2. Close existing ChatGPT/Codex desktop app processes.
 3. Run `CodexProxyLauncher.exe`.
 
 On first run, the launcher creates:
@@ -51,11 +51,12 @@ does not start a local server.
 
 ## Config
 
+Only settings that affect the proven launch command are kept:
+
 ```json
 {
-  "_comment": "Codex Proxy Launcher configuration",
+  "_comment": "ChatGPT/Codex Proxy Launcher configuration",
   "_version": 1,
-  "log_level": "info",
   "proxy": {
     "type": "http",
     "host": "127.0.0.1",
@@ -85,8 +86,7 @@ does not start a local server.
     "172.31.*",
     "192.168.*"
   ],
-  "disable_quic": true,
-  "set_proxy_environment": false
+  "disable_quic": true
 }
 ```
 
@@ -117,17 +117,17 @@ The packaged output contains:
 
 ## Verify
 
-After launching Codex through the launcher:
+After launching through the launcher:
 
 ```powershell
-$ids = Get-Process | Where-Object { $_.ProcessName -match '^Codex$|^codex$' } | Select-Object -ExpandProperty Id
+$ids = Get-Process | Where-Object { $_.ProcessName -match '^ChatGPT$|^Codex$|^codex$' } | Select-Object -ExpandProperty Id
 Get-NetTCPConnection -OwningProcess $ids -ErrorAction SilentlyContinue |
   Select-Object OwningProcess,LocalAddress,LocalPort,RemoteAddress,RemotePort,State |
   Sort-Object OwningProcess,RemoteAddress
 ```
 
-Codex traffic should primarily connect to `127.0.0.1:10808` instead of direct
-remote `:443` connections.
+The app should primarily connect to `127.0.0.1:10808` instead of direct remote
+`:443` connections.
 
 Logs are written to:
 

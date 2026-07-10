@@ -19,7 +19,6 @@ struct ProxyConfig {
 
 struct AppConfig {
   int version = 1;
-  std::string log_level = "info";
   ProxyConfig proxy;
   std::vector<std::string> bypass_list = {
       "<-loopback>", "localhost", "127.0.0.1", "::1",
@@ -28,7 +27,6 @@ struct AppConfig {
       "172.25.*", "172.26.*", "172.27.*", "172.28.*", "172.29.*",
       "172.30.*", "172.31.*", "192.168.*"};
   bool disable_quic = true;
-  bool set_proxy_environment = false;
 };
 
 AppConfig DefaultConfig();

@@ -3,7 +3,6 @@
 #include "common/process_utils.h"
 #include "common/string_utils.h"
 
-#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -49,52 +48,8 @@ std::wstring JoinBypassList(const std::vector<std::string>& values) {
   return result;
 }
 
-std::wstring BuildEnvironmentBlockWithProxy(const AppConfig& config) {
-  LPWCH current = GetEnvironmentStringsW();
-  if (!current) {
-    return {};
-  }
-
-  std::vector<std::wstring> entries;
-  for (LPWCH item = current; *item; item += wcslen(item) + 1) {
-    std::wstring entry = item;
-    std::wstring lower = ToLower(entry);
-    if (lower.rfind(L"http_proxy=", 0) == 0 ||
-        lower.rfind(L"https_proxy=", 0) == 0 ||
-        lower.rfind(L"all_proxy=", 0) == 0 ||
-        lower.rfind(L"no_proxy=", 0) == 0) {
-      continue;
-    }
-    entries.push_back(entry);
-  }
-  FreeEnvironmentStringsW(current);
-
-  std::wstring proxy = ProxyUrl(config);
-  entries.push_back(L"HTTP_PROXY=" + proxy);
-  entries.push_back(L"HTTPS_PROXY=" + proxy);
-  entries.push_back(L"ALL_PROXY=" + proxy);
-  entries.push_back(L"http_proxy=" + proxy);
-  entries.push_back(L"https_proxy=" + proxy);
-  entries.push_back(L"all_proxy=" + proxy);
-  entries.push_back(L"NO_PROXY=localhost,127.0.0.1,::1");
-  entries.push_back(L"no_proxy=localhost,127.0.0.1,::1");
-
-  std::sort(entries.begin(), entries.end(),
-            [](const std::wstring& left, const std::wstring& right) {
-              return ToLower(left) < ToLower(right);
-            });
-
-  std::wstring block;
-  for (const auto& entry : entries) {
-    block += entry;
-    block.push_back(L'\0');
-  }
-  block.push_back(L'\0');
-  return block;
-}
-
-std::wstring BuildCommandLine(const std::wstring& codex_path, const AppConfig& config) {
-  std::wstring command = L"\"" + codex_path + L"\" " +
+std::wstring BuildCommandLine(const std::wstring& app_path, const AppConfig& config) {
+  std::wstring command = L"\"" + app_path + L"\" " +
       L"--proxy-server=\"" + ProxyUrl(config) + L"\"";
 
   std::wstring bypass = JoinBypassList(config.bypass_list);
@@ -107,38 +62,27 @@ std::wstring BuildCommandLine(const std::wstring& codex_path, const AppConfig& c
   return command;
 }
 
-int StartCodexWithProxy(const std::wstring& codex_path, const AppConfig& config) {
+int StartAppWithProxy(const std::wstring& app_path, const AppConfig& config) {
   STARTUPINFOW si{};
   si.cb = sizeof(si);
   PROCESS_INFORMATION pi{};
 
-  std::wstring command = BuildCommandLine(codex_path, config);
-  std::wstring environment;
-  LPVOID environment_ptr = nullptr;
-  DWORD creation_flags = 0;
-  if (config.set_proxy_environment) {
-    environment = BuildEnvironmentBlockWithProxy(config);
-    if (!environment.empty()) {
-      environment_ptr = environment.data();
-      creation_flags |= CREATE_UNICODE_ENVIRONMENT;
-    }
-  }
-
-  Logger::Instance().Info(L"Using Codex path: " + codex_path);
-  Logger::Instance().Info(L"Starting Codex with command: " + command);
-  BOOL created = CreateProcessW(codex_path.c_str(), command.data(), nullptr, nullptr,
-                                FALSE, creation_flags, environment_ptr,
-                                GetDirName(codex_path).c_str(), &si, &pi);
+  std::wstring command = BuildCommandLine(app_path, config);
+  Logger::Instance().Info(L"Using app path: " + app_path);
+  Logger::Instance().Info(L"Starting app with command: " + command);
+  BOOL created = CreateProcessW(app_path.c_str(), command.data(), nullptr, nullptr,
+                                FALSE, 0, nullptr, GetDirName(app_path).c_str(),
+                                &si, &pi);
   if (!created) {
     Logger::Instance().Warn(FormatLastError(L"CreateProcessW failed", GetLastError()));
-    std::wcerr << L"Unable to start Codex.\n";
+    std::wcerr << L"Unable to start ChatGPT/Codex desktop app.\n";
     return 10;
   }
 
-  Logger::Instance().Info(L"Started Codex PID " + std::to_wstring(pi.dwProcessId));
+  Logger::Instance().Info(L"Started app PID " + std::to_wstring(pi.dwProcessId));
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
-  std::wcout << L"Codex launched with app proxy. Log: "
+  std::wcout << L"ChatGPT/Codex launched with app proxy. Log: "
              << Logger::Instance().LogPath() << L"\n";
   return 0;
 }
@@ -160,17 +104,20 @@ int wmain(int argc, wchar_t** argv) {
     std::wcerr << L"Unable to load config: " << error << L"\n";
     return 1;
   }
+  if (!SaveConfig(args.config_path, config, &error)) {
+    Logger::Instance().Warn(L"Unable to normalize config: " + error);
+  }
 
-  std::wstring codex_path = args.codex_path.empty() ? FindCodexAppPath() : args.codex_path;
-  if (codex_path.empty() || !FileExists(codex_path)) {
-    std::wcerr << L"Unable to locate Codex.exe. Use --codex <path>.\n";
+  std::wstring app_path = args.codex_path.empty() ? FindCodexAppPath() : args.codex_path;
+  if (app_path.empty() || !FileExists(app_path)) {
+    std::wcerr << L"Unable to locate ChatGPT.exe or Codex.exe. Use --codex <path>.\n";
     return 3;
   }
 
-  if (AnyProcessRunningAtPath(codex_path)) {
-    std::wcerr << L"Codex desktop app is already running. Close Codex desktop first.\n";
+  if (AnyProcessRunningAtPath(app_path)) {
+    std::wcerr << L"ChatGPT/Codex desktop app is already running. Close it first.\n";
     return 2;
   }
 
-  return StartCodexWithProxy(codex_path, config);
+  return StartAppWithProxy(app_path, config);
 }
