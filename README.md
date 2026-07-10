@@ -33,11 +33,27 @@ The launcher is equivalent to this PowerShell command with default config:
 The value of this project is making that long command repeatable,
 configurable, and less error-prone.
 
-## Use
+## Quick Start
+
+Use the launcher when you want ChatGPT/Codex desktop to use V2RayN without
+turning on Windows system proxy or TUN mode.
 
 1. Keep V2RayN running with mixed port `127.0.0.1:10808`.
-2. Close existing ChatGPT/Codex desktop app processes.
-3. Run `CodexProxyLauncher.exe`.
+2. Keep Windows system proxy off.
+3. Keep V2RayN TUN mode off.
+4. Close existing ChatGPT/Codex desktop app windows.
+5. Run `CodexProxyLauncher.exe`.
+
+With the default config, the launcher starts the Microsoft Store app through:
+
+```text
+http://127.0.0.1:10808
+```
+
+It automatically prefers the new `ChatGPT.exe` entry from the updated Microsoft
+Store app. If only the older `Codex.exe` entry exists, it falls back to that.
+
+## Config File
 
 On first run, the launcher creates:
 
@@ -48,6 +64,10 @@ On first run, the launcher creates:
 You can edit the JSON directly or open `config-web.html` locally to import,
 edit, validate, and export the same config format. The HTML file is static and
 does not start a local server.
+
+If an older config contains removed fields such as `log_level` or
+`set_proxy_environment`, the launcher rewrites the file using the current
+minimal schema after it loads successfully.
 
 ## Config
 
