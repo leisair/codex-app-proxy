@@ -30,7 +30,7 @@ target_link_libraries(codex_proxy_common PUBLIC ws2_32)
 add_executable(CodexProxyLauncher
   src/launcher/main.cpp
 )
-target_link_libraries(CodexProxyLauncher PRIVATE codex_proxy_common)
+target_link_libraries(CodexProxyLauncher PRIVATE codex_proxy_common shell32)
 
 if(CODEX_PROXY_BUILD_TESTS)
   enable_testing()
@@ -42,4 +42,4 @@ if(CODEX_PROXY_BUILD_TESTS)
 endif()
 
 install(TARGETS CodexProxyLauncher RUNTIME DESTINATION .)
-install(FILES resources/config-web.html resources/default_config.json README.md DESTINATION .)
+install(FILES resources/START-HERE.html resources/default_config.json README.md DESTINATION .)

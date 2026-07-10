@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>开始使用 - ChatGPT/Codex Proxy Launcher</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #eef1f4;
+      --surface: #ffffff;
+      --surface-2: #f7f8fa;
+      --ink: #16202a;
+      --muted: #5e6a76;
+      --faint: #7a8692;
+      --line: #d7dde3;
+      --line-strong: #bcc6d0;
+      --blue: #075fca;
+      --blue-hover: #064fa7;
+      --blue-soft: #eaf3ff;
+      --green: #177245;
+      --green-soft: #e8f6ee;
+      --amber: #8a5700;
+      --amber-soft: #fff4d6;
+      --red: #b42318;
+      --red-soft: #fff0ee;
+      --shadow: 0 18px 48px rgba(25, 35, 45, .09);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --page: #0f1419;
+        --surface: #171d23;
+        --surface-2: #1d242b;
+        --ink: #edf2f7;
+        --muted: #a7b2bd;
+        --faint: #8995a1;
+        --line: #303942;
+        --line-strong: #46515c;
+        --blue: #67a9ff;
+        --blue-hover: #8abdff;
+        --blue-soft: #142b46;
+        --green: #72d79c;
+        --green-soft: #173326;
+        --amber: #f0c36a;
+        --amber-soft: #382d16;
+        --red: #ff8a80;
+        --red-soft: #3b2020;
+        --shadow: 0 18px 48px rgba(0, 0, 0, .28);
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: "Segoe UI Variable", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    button, input, select, textarea { font: inherit; letter-spacing: 0; }
+    button, select, input, textarea { border-radius: 6px; }
+    button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible,
+    summary:focus-visible { outline: 3px solid color-mix(in srgb, var(--blue) 35%, transparent); outline-offset: 2px; }
+    .top-line { height: 4px; background: var(--blue); }
+    .shell { width: min(1160px, calc(100vw - 32px)); margin: 0 auto; }
+    header { padding: 28px 0 22px; }
+    .eyebrow { margin: 0 0 7px; color: var(--blue); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(25px, 4vw, 38px); line-height: 1.15; letter-spacing: 0; }
+    .subtitle { max-width: 740px; margin: 10px 0 0; color: var(--muted); font-size: 16px; }
+    .trust {
+      display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 18px; padding-top: 14px;
+      border-top: 1px solid var(--line); color: var(--muted); font-size: 13px;
+    }
+    .trust span::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--green); }
+    .stepbar { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); }
+    .step { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 13px 16px; border-right: 1px solid var(--line); }
+    .step:last-child { border-right: 0; }
+    .step b { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--blue); }
+    .step strong { display: block; font-size: 14px; }
+    .step small { display: block; color: var(--faint); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 18px; align-items: start; margin: 18px auto 40px; }
+    .main-panel, .summary-panel { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .main-panel { min-width: 0; }
+    .section { padding: 26px; border-bottom: 1px solid var(--line); }
+    .section:last-child { border-bottom: 0; }
+    .section-heading { display: flex; gap: 13px; align-items: flex-start; margin-bottom: 18px; }
+    .section-number { flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--surface); font-weight: 700; }
+    h2 { margin: 0; font-size: 19px; letter-spacing: 0; }
+    h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: 0; }
+    .section-heading p, .field-help, .minor { margin: 4px 0 0; color: var(--muted); }
+    .route { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; padding: 16px; border-left: 4px solid var(--green); background: var(--green-soft); }
+    .route strong { display: block; }
+    .route p { margin: 3px 0 0; color: var(--muted); }
+    .checklist { display: grid; gap: 10px; margin-top: 16px; }
+    .check-row { display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start; }
+    .check-row b { color: var(--green); }
+    .field-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; }
+    .field { min-width: 0; }
+    label, .label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
+    .default-mark { color: var(--faint); font-weight: 400; }
+    select, input, textarea {
+      width: 100%; min-width: 0; border: 1px solid var(--line-strong); padding: 10px 11px;
+      background: var(--surface); color: var(--ink);
+    }
+    select:hover, input:hover, textarea:hover { border-color: var(--blue); }
+    .field-help { font-size: 12px; line-height: 1.5; }
+    .notice { margin-top: 16px; padding: 12px 14px; background: var(--amber-soft); color: var(--amber); border-left: 3px solid var(--amber); }
+    .notice strong { color: inherit; }
+    .action-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    button, .file-button {
+      min-height: 40px; border: 1px solid var(--line-strong); padding: 9px 14px;
+      background: var(--surface); color: var(--ink); cursor: pointer; font-weight: 650;
+    }
+    button:hover, .file-button:hover { border-color: var(--blue); color: var(--blue); }
+    button.primary { border-color: var(--blue); background: var(--blue); color: #fff; }
+    button.primary:hover { background: var(--blue-hover); color: #fff; }
+    button.link { min-height: auto; padding: 0; border: 0; color: var(--blue); background: transparent; }
+    .file-button { display: inline-flex; align-items: center; }
+    .status { min-height: 24px; margin: 14px 0 0; padding: 10px 12px; background: var(--surface-2); color: var(--muted); }
+    .status.ok { background: var(--green-soft); color: var(--green); }
+    .status.bad { background: var(--red-soft); color: var(--red); }
+    .next-steps { display: none; margin-top: 16px; padding: 16px; border: 1px solid var(--green); background: var(--green-soft); }
+    .next-steps.show { display: block; }
+    .next-steps ol { margin: 8px 0 0; padding-left: 22px; }
+    details { border-bottom: 1px solid var(--line); }
+    details:last-child { border-bottom: 0; }
+    summary { padding: 18px 26px; cursor: pointer; font-weight: 700; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; float: right; color: var(--blue); font-size: 20px; font-weight: 400; }
+    details[open] summary::after { content: "-"; }
+    .details-body { padding: 0 26px 24px; }
+    .setting-row { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; padding: 16px 0; border-top: 1px solid var(--line); }
+    .setting-row:first-child { border-top: 0; }
+    .toggle { position: relative; width: 46px; height: 26px; }
+    .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+    .toggle span { position: absolute; inset: 0; border-radius: 13px; background: var(--line-strong); cursor: pointer; }
+    .toggle span::after { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: transform .16s ease; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+    .toggle input:checked + span { background: var(--blue); }
+    .toggle input:checked + span::after { transform: translateX(20px); }
+    textarea { min-height: 180px; resize: vertical; font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; }
+    .code-block { position: relative; margin-top: 10px; }
+    pre { margin: 0; padding: 14px; max-height: 310px; overflow: auto; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.55 Consolas, "Cascadia Mono", monospace; }
+    .code-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .summary-panel { position: sticky; top: 16px; padding: 20px; }
+    .summary-panel h2 { font-size: 16px; }
+    .health { margin: 14px 0; padding: 12px; background: var(--green-soft); color: var(--green); font-weight: 700; }
+    .health.bad { background: var(--red-soft); color: var(--red); }
+    .proxy-value { margin: 8px 0 16px; padding: 12px; border: 1px solid var(--line); background: var(--surface-2); font: 13px Consolas, "Cascadia Mono", monospace; overflow-wrap: anywhere; }
+    .summary-list { margin: 0; }
+    .summary-list div { display: grid; grid-template-columns: 90px 1fr; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line); }
+    .summary-list dt { color: var(--faint); }
+    .summary-list dd { margin: 0; text-align: right; }
+    .change-note { margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+    .factory { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+    .factory ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+    footer { padding: 0 0 32px; color: var(--faint); font-size: 12px; text-align: center; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: 1fr; }
+      .summary-panel { position: static; }
+      .field-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+      .shell { width: min(100% - 20px, 1160px); }
+      header { padding: 20px 2px 16px; }
+      .stepbar { grid-template-columns: 1fr; }
+      .step { border-right: 0; border-bottom: 1px solid var(--line); }
+      .step:last-child { border-bottom: 0; }
+      .layout { margin-top: 10px; }
+      .section, .details-body { padding: 20px 16px; }
+      summary { padding: 17px 16px; }
+      .route { grid-template-columns: 1fr; }
+      .setting-row { grid-template-columns: 1fr; }
+      .action-row > * { width: 100%; justify-content: center; text-align: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-line"></div>
+  <header class="shell">
+    <p class="eyebrow">Offline setup guide</p>
+    <h1>ChatGPT/Codex 代理启动器</h1>
+    <p class="subtitle">让桌面版 ChatGPT/Codex 使用你指定的本地代理，不开启 Windows 系统代理，不需要 TUN，也不运行额外后台服务。</p>
+    <div class="trust" aria-label="隐私与行为说明">
+      <span>本页完全离线</span><span>配置不会上传</span><span>不修改系统代理</span><span>启动后立即退出</span>
+    </div>
+  </header>
+
+  <div class="shell stepbar" aria-label="使用步骤">
+    <div class="step"><b>1</b><div><strong>准备代理</strong><small>确认软件和本地端口</small></div></div>
+    <div class="step"><b>2</b><div><strong>保存配置</strong><small>默认配置也可直接使用</small></div></div>
+    <div class="step"><b>3</b><div><strong>双击启动</strong><small>关闭已有 App 后运行</small></div></div>
+  </div>
+
+  <main class="shell layout">
+    <div class="main-panel">
+      <section class="section" id="prepare">
+        <div class="section-heading">
+          <span class="section-number">1</span>
+          <div><h2>先确认你的情况</h2><p>多数 V2RayN 用户不需要修改任何配置。</p></div>
+        </div>
+        <div class="route">
+          <div><strong>使用 V2RayN，mixed 端口是 10808？</strong><p>发布包里的 config.json 已经是这个出厂配置。启动 V2RayN 后，可以直接进入第 3 步。</p></div>
+          <button id="useFactory" type="button">使用出厂配置</button>
+        </div>
+        <div class="checklist">
+          <div class="check-row"><b>01</b><div><strong>你已经有可用的代理软件和节点</strong><div class="minor">本项目不提供节点，也不会替你启动 V2RayN、Clash 或其他代理软件。</div></div></div>
+          <div class="check-row"><b>02</b><div><strong>你使用的是 Windows x64 商店版 ChatGPT</strong><div class="minor">当前不支持 macOS、网页版 ChatGPT 或任意其他程序。</div></div></div>
+          <div class="check-row"><b>03</b><div><strong>运行启动器前会完全退出已有 ChatGPT/Codex</strong><div class="minor">Chromium 代理参数通常只对第一个 App 进程生效。</div></div></div>
+        </div>
+      </section>
+
+      <section class="section" id="configure">
+        <div class="section-heading">
+          <span class="section-number">2</span>
+          <div><h2>确认本地代理配置</h2><p>预设只负责填入常见值，不会检测或控制你的代理软件。</p></div>
+        </div>
+        <div class="field" style="margin-bottom:16px">
+          <label for="preset">代理软件预设 <span class="default-mark">出厂：V2RayN mixed 10808</span></label>
+          <select id="preset">
+            <option value="v2rayn">V2RayN - mixed 10808</option>
+            <option value="clash-verge">Clash Verge Rev - mixed 7897</option>
+            <option value="clash-mihomo">Clash / Mihomo - mixed 7890</option>
+            <option value="socks5">通用 SOCKS5 - 1080</option>
+            <option value="custom">自定义配置</option>
+          </select>
+          <p class="field-help">如果你在代理软件中改过端口，请选择最接近的预设后再修改下面的端口。</p>
+        </div>
+        <div class="field-grid">
+          <div class="field">
+            <label for="proxyType">连接方式 <span class="default-mark">出厂：http</span></label>
+            <select id="proxyType"><option value="http">HTTP / mixed</option><option value="socks5">SOCKS5</option></select>
+            <p class="field-help">mixed 端口通常同时支持 HTTP 与 SOCKS5，本项目默认通过 HTTP CONNECT 连接。</p>
+          </div>
+          <div class="field">
+            <label for="proxyHost">代理地址 <span class="default-mark">出厂：127.0.0.1</span></label>
+            <input id="proxyHost" value="127.0.0.1" autocomplete="off" spellcheck="false">
+            <p class="field-help">127.0.0.1 表示“这台电脑”。普通用户通常不需要修改。</p>
+          </div>
+          <div class="field">
+            <label for="proxyPort">本地监听端口 <span class="default-mark">出厂：10808</span></label>
+            <input id="proxyPort" type="number" min="1" max="65535" value="10808" inputmode="numeric">
+            <p class="field-help">填写代理软件界面的本地/mixed 端口，不是节点服务器端口或远程 443。</p>
+          </div>
+        </div>
+        <div class="notice"><strong>端口不确定？</strong> 打开代理软件设置，寻找“mixed port”“混合端口”“HTTP 端口”或“SOCKS 端口”。</div>
+      </section>
+
+      <section class="section" id="save-section">
+        <div class="section-heading">
+          <span class="section-number">3</span>
+          <div><h2>保存配置并启动</h2><p>config.json 必须与 CodexProxyLauncher.exe 位于同一个文件夹。</p></div>
+        </div>
+        <div class="action-row">
+          <button class="primary" id="save" type="button">保存到启动器目录</button>
+          <button id="download" type="button">普通下载 config.json</button>
+          <button id="resetAll" type="button">恢复全部出厂值</button>
+        </div>
+        <div id="status" class="status" role="status" aria-live="polite">当前配置有效。保存时请选择 CodexProxyLauncher.exe 所在文件夹。</div>
+        <div id="nextSteps" class="next-steps">
+          <strong>配置已生成，接下来：</strong>
+          <ol><li>确认代理软件正在运行且节点可用。</li><li>完全退出已有 ChatGPT/Codex，包括后台进程。</li><li>回到此文件夹，双击 CodexProxyLauncher.exe。</li></ol>
+        </div>
+      </section>
+
+      <details id="advanced">
+        <summary>高级设置：QUIC 与本地直连列表</summary>
+        <div class="details-body">
+          <div class="setting-row">
+            <div><h3>禁用 QUIC <span class="default-mark">出厂：开启，建议保持</span></h3><p class="minor">最终添加 <code>--disable-quic</code>，让 App 优先使用可由本地 HTTP/SOCKS5 代理承载的 TCP，减少 UDP 连接绕过代理或直接失败的可能。</p></div>
+            <label class="toggle" aria-label="禁用 QUIC"><input id="disableQuic" type="checkbox" checked><span></span></label>
+          </div>
+          <div class="setting-row" style="grid-template-columns:1fr">
+            <div><h3>本地与内网直连列表 <span class="default-mark">出厂：回环地址和常见私网</span></h3><p class="minor">这些目标不会交给代理，可避免本地服务失效或出现代理循环。不了解 Chromium bypass 语法时请保留默认值。</p></div>
+            <textarea id="bypassList" spellcheck="false" aria-label="本地与内网直连列表"></textarea>
+            <div><button id="resetBypass" type="button">恢复默认列表</button></div>
+          </div>
+        </div>
+      </details>
+
+      <details id="expert">
+        <summary>专家工具：JSON、等价命令与导入</summary>
+        <div class="details-body">
+          <p class="minor">这里展示启动器真正读取和执行的内容，便于审查、自动化或手动验证。普通使用无需操作。</p>
+          <div class="action-row" style="margin:14px 0">
+            <label class="file-button">导入现有 config.json<input id="importFile" class="sr-only" type="file" accept="application/json,.json"></label>
+          </div>
+          <h3>即将保存的 config.json</h3>
+          <div class="code-block"><div class="code-actions"><button id="copyJson" type="button">复制 JSON</button></div><pre id="jsonOutput"></pre></div>
+          <h3 style="margin-top:20px">等价 PowerShell 命令</h3>
+          <div class="code-block"><div class="code-actions"><button id="copyCommand" type="button">复制命令</button></div><pre id="commandOutput"></pre></div>
+        </div>
+      </details>
+
+      <details id="faq">
+        <summary>遇到问题：按现象排查</summary>
+        <div class="details-body">
+          <h3>提示“无法连接本地代理”</h3><p class="minor">确认代理软件正在运行；再核对当前端口是否等于软件界面显示的本地/mixed 端口。</p>
+          <h3 style="margin-top:16px">提示“ChatGPT/Codex 已经运行”</h3><p class="minor">从系统托盘和任务管理器完全退出桌面 App，然后重新双击启动器。终端里的 Codex CLI 不受影响。</p>
+          <h3 style="margin-top:16px">配置保存后没有变化</h3><p class="minor">检查新 config.json 是否真的覆盖到了启动器旁边，而不是仍留在浏览器“下载”文件夹。</p>
+          <h3 style="margin-top:16px">仍然无法解决</h3><p class="minor">查看同目录 logs 文件夹中的最新日志。日志只记录启动路径、代理地址和错误，不记录账号或对话内容。</p>
+        </div>
+      </details>
+    </div>
+
+    <aside class="summary-panel" aria-label="当前配置摘要">
+      <h2>当前配置</h2>
+      <div id="health" class="health">配置有效</div>
+      <div id="proxyValue" class="proxy-value">http://127.0.0.1:10808</div>
+      <dl class="summary-list">
+        <div><dt>预设</dt><dd id="presetSummary">V2RayN</dd></div>
+        <div><dt>QUIC</dt><dd id="quicSummary">已禁用</dd></div>
+        <div><dt>内网直连</dt><dd id="bypassSummary">23 项</dd></div>
+      </dl>
+      <p id="changeNote" class="change-note">当前就是出厂配置，无需修改。</p>
+      <div class="factory">
+        <h3>出厂配置</h3>
+        <ul><li>HTTP / mixed</li><li>127.0.0.1:10808</li><li>禁用 QUIC：开启</li><li>本地与私网：直连</li></ul>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="shell">当前文件：START-HERE.html · 单文件离线向导 · 不连接任何网站 · 不读取代理软件配置</footer>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const DEFAULT_BYPASS = [
+      '<-loopback>', 'localhost', '127.0.0.1', '::1', '10.*',
+      '172.16.*', '172.17.*', '172.18.*', '172.19.*', '172.20.*',
+      '172.21.*', '172.22.*', '172.23.*', '172.24.*', '172.25.*',
+      '172.26.*', '172.27.*', '172.28.*', '172.29.*', '172.30.*',
+      '172.31.*', '192.168.*'
+    ];
+    const FACTORY = { type: 'http', host: '127.0.0.1', port: 10808, disableQuic: true };
+    const PRESETS = {
+      v2rayn: { label: 'V2RayN', type: 'http', host: '127.0.0.1', port: 10808 },
+      'clash-verge': { label: 'Clash Verge Rev', type: 'http', host: '127.0.0.1', port: 7897 },
+      'clash-mihomo': { label: 'Clash / Mihomo', type: 'http', host: '127.0.0.1', port: 7890 },
+      socks5: { label: '通用 SOCKS5', type: 'socks5', host: '127.0.0.1', port: 1080 }
+    };
+
+    function lines(value) { return value.split(/\r?\n/).map(v => v.trim()).filter(Boolean); }
+    function currentConfig() {
+      return {
+        _comment: 'ChatGPT/Codex Proxy Launcher configuration',
+        _version: 1,
+        proxy: { type: $('proxyType').value, host: $('proxyHost').value.trim(), port: Number($('proxyPort').value) },
+        bypass_list: lines($('bypassList').value),
+        disable_quic: $('disableQuic').checked
+      };
+    }
+    function validate(config) {
+      if (!config.proxy || !['http', 'socks5'].includes(config.proxy.type)) return '连接方式必须是 HTTP 或 SOCKS5。';
+      if (!config.proxy.host) return '代理地址不能为空。';
+      if (!Number.isInteger(config.proxy.port) || config.proxy.port < 1 || config.proxy.port > 65535) return '本地监听端口必须是 1 到 65535。';
+      if (!Array.isArray(config.bypass_list) || !config.bypass_list.length) return '本地与内网直连列表至少保留一项。';
+      return '';
+    }
+    function commandFor(config) {
+      const proxy = `${config.proxy.type}://${config.proxy.host}:${config.proxy.port}`;
+      let result = `& (Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\\ChatGPT.exe") --proxy-server="${proxy}"`;
+      if (config.bypass_list.length) result += ` --proxy-bypass-list="${config.bypass_list.join(';')}"`;
+      if (config.disable_quic) result += ' --disable-quic';
+      return result;
+    }
+    function configText() { return JSON.stringify(currentConfig(), null, 2) + '\n'; }
+    function isFactory(config) {
+      return config.proxy.type === FACTORY.type && config.proxy.host === FACTORY.host && config.proxy.port === FACTORY.port &&
+        config.disable_quic === FACTORY.disableQuic && JSON.stringify(config.bypass_list) === JSON.stringify(DEFAULT_BYPASS);
+    }
+    function refresh() {
+      const config = currentConfig();
+      const error = validate(config);
+      const preset = PRESETS[$('preset').value];
+      $('jsonOutput').textContent = JSON.stringify(config, null, 2);
+      $('commandOutput').textContent = commandFor(config);
+      $('proxyValue').textContent = `${config.proxy.type}://${config.proxy.host || '未填写'}:${config.proxy.port || '未填写'}`;
+      $('presetSummary').textContent = preset ? preset.label : '自定义';
+      $('quicSummary').textContent = config.disable_quic ? '已禁用' : '允许使用';
+      $('bypassSummary').textContent = `${config.bypass_list.length} 项`;
+      $('health').textContent = error || '配置有效';
+      $('health').className = error ? 'health bad' : 'health';
+      $('changeNote').textContent = isFactory(config) ? '当前就是出厂配置，无需修改。' : '当前配置已不同于出厂值，可随时恢复。';
+      if (!error && !$('status').classList.contains('ok')) {
+        $('status').textContent = '当前配置有效。保存时请选择 CodexProxyLauncher.exe 所在文件夹。';
+        $('status').className = 'status';
+      } else if (error) {
+        $('status').textContent = error;
+        $('status').className = 'status bad';
+      }
+    }
+    function apply(config, presetValue = 'custom') {
+      $('proxyType').value = config.proxy?.type || 'http';
+      $('proxyHost').value = config.proxy?.host || '127.0.0.1';
+      $('proxyPort').value = config.proxy?.port || 10808;
+      $('bypassList').value = (config.bypass_list || DEFAULT_BYPASS).join('\n');
+      $('disableQuic').checked = config.disable_quic !== false;
+      $('preset').value = presetValue;
+      $('nextSteps').classList.remove('show');
+      refresh();
+    }
+    function factoryConfig() {
+      return { proxy: { type: FACTORY.type, host: FACTORY.host, port: FACTORY.port }, bypass_list: [...DEFAULT_BYPASS], disable_quic: FACTORY.disableQuic };
+    }
+    function downloadableText() {
+      const config = currentConfig();
+      const error = validate(config);
+      if (error) throw new Error(error);
+      return JSON.stringify(config, null, 2) + '\n';
+    }
+    function ordinaryDownload() {
+      try {
+        const blob = new Blob([downloadableText()], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'config.json'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        $('status').textContent = 'config.json 已下载。请把它移动到 CodexProxyLauncher.exe 旁边并覆盖原文件。';
+        $('status').className = 'status ok'; $('nextSteps').classList.add('show');
+      } catch (error) { showError(error.message); }
+    }
+    function showError(message) { $('status').textContent = message; $('status').className = 'status bad'; $('nextSteps').classList.remove('show'); }
+    async function copyText(value, label) {
+      try {
+        if (navigator.clipboard) await navigator.clipboard.writeText(value);
+        else {
+          const area = document.createElement('textarea'); area.value = value; area.style.position = 'fixed'; area.style.opacity = '0';
+          document.body.appendChild(area); area.select(); document.execCommand('copy'); area.remove();
+        }
+        $('status').textContent = `${label}已复制。`; $('status').className = 'status ok';
+      } catch { showError('复制失败，请手动选择内容复制。'); }
+    }
+
+    $('preset').addEventListener('change', () => {
+      const preset = PRESETS[$('preset').value];
+      if (!preset) return refresh();
+      $('proxyType').value = preset.type; $('proxyHost').value = preset.host; $('proxyPort').value = preset.port; refresh();
+    });
+    ['proxyType', 'proxyHost', 'proxyPort'].forEach(id => $(id).addEventListener('input', () => { $('preset').value = 'custom'; refresh(); }));
+    ['bypassList', 'disableQuic'].forEach(id => $(id).addEventListener('input', refresh));
+    $('useFactory').addEventListener('click', () => { apply(factoryConfig(), 'v2rayn'); $('save-section').scrollIntoView({ behavior: 'smooth' }); });
+    $('resetAll').addEventListener('click', () => apply(factoryConfig(), 'v2rayn'));
+    $('resetBypass').addEventListener('click', () => { $('bypassList').value = DEFAULT_BYPASS.join('\n'); refresh(); });
+    $('download').addEventListener('click', ordinaryDownload);
+    $('save').addEventListener('click', async () => {
+      if (!window.showSaveFilePicker) return ordinaryDownload();
+      try {
+        const handle = await window.showSaveFilePicker({ suggestedName: 'config.json', types: [{ description: 'JSON 配置', accept: { 'application/json': ['.json'] } }] });
+        const writable = await handle.createWritable(); await writable.write(downloadableText()); await writable.close();
+        $('status').textContent = 'config.json 已保存。请确认它与 CodexProxyLauncher.exe 在同一个文件夹。';
+        $('status').className = 'status ok'; $('nextSteps').classList.add('show');
+      } catch (error) { if (error.name !== 'AbortError') showError(`保存失败：${error.message}`); }
+    });
+    $('importFile').addEventListener('change', async event => {
+      const file = event.target.files[0]; if (!file) return;
+      try { const config = JSON.parse(await file.text()); const error = validate(config); if (error) throw new Error(error); apply(config, 'custom'); $('status').textContent = '配置导入成功，请检查后重新保存。'; $('status').className = 'status ok'; }
+      catch (error) { showError(`导入失败：${error.message}`); }
+      event.target.value = '';
+    });
+    $('copyJson').addEventListener('click', () => copyText(configText(), 'JSON '));
+    $('copyCommand').addEventListener('click', () => copyText(commandFor(currentConfig()), 'PowerShell 命令'));
+
+    apply(factoryConfig(), 'v2rayn');
+  </script>
+</body>
+</html>

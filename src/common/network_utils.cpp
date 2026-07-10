@@ -22,7 +22,7 @@ bool CanConnectTcp(const std::string& host, uint16_t port, int timeout_ms,
   int rc = WSAStartup(MAKEWORD(2, 2), &data);
   if (rc != 0) {
     if (error) {
-      *error = SocketErrorMessage(L"Unable to initialize network check", rc);
+      *error = SocketErrorMessage(L"无法初始化网络检查", rc);
     }
     return false;
   }
@@ -36,7 +36,7 @@ bool CanConnectTcp(const std::string& host, uint16_t port, int timeout_ms,
   rc = getaddrinfo(host.c_str(), service.c_str(), &hints, &addresses);
   if (rc != 0) {
     if (error) {
-      *error = L"Unable to resolve proxy host " + Utf8ToWide(host) + L" (" +
+      *error = L"无法解析代理地址 " + Utf8ToWide(host) + L" (" +
                std::to_wstring(rc) + L")";
     }
     WSACleanup();
@@ -95,7 +95,7 @@ bool CanConnectTcp(const std::string& host, uint16_t port, int timeout_ms,
   freeaddrinfo(addresses);
   WSACleanup();
   if (!connected && error) {
-    *error = SocketErrorMessage(L"Unable to connect to the configured proxy", last_error);
+    *error = SocketErrorMessage(L"无法连接配置的代理", last_error);
   }
   return connected;
 }

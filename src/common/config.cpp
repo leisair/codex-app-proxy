@@ -210,7 +210,7 @@ std::string SerializeConfig(const AppConfig& config) {
 bool SaveConfig(const std::wstring& path, const AppConfig& config, std::wstring* error) {
   if (!WriteFileUtf8(path, SerializeConfig(config))) {
     if (error) {
-      *error = L"Failed to write config: " + path;
+      *error = L"无法写入配置文件：" + path;
     }
     return false;
   }
@@ -224,7 +224,7 @@ bool EnsureDefaultConfig(const std::wstring& path, std::wstring* error) {
   }
   if (ec) {
     if (error) {
-      *error = L"Unable to access config path: " + path;
+      *error = L"无法访问配置路径：" + path;
     }
     return false;
   }
@@ -234,19 +234,19 @@ bool EnsureDefaultConfig(const std::wstring& path, std::wstring* error) {
 bool ValidateConfig(const AppConfig& config, std::wstring* error) {
   if (Trim(config.proxy.host).empty()) {
     if (error) {
-      *error = L"proxy.host must not be empty";
+      *error = L"proxy.host（代理地址）不能为空";
     }
     return false;
   }
   if (config.proxy.port == 0) {
     if (error) {
-      *error = L"proxy.port must be between 1 and 65535";
+      *error = L"proxy.port（本地监听端口）必须在 1 到 65535 之间";
     }
     return false;
   }
   if (config.bypass_list.empty()) {
     if (error) {
-      *error = L"bypass_list must contain at least one entry";
+      *error = L"bypass_list（直连列表）至少需要保留一项";
     }
     return false;
   }
@@ -263,7 +263,7 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
   std::string json = ReadFileUtf8(path);
   if (json.empty()) {
     if (error) {
-      *error = L"Config is empty or unreadable: " + path;
+      *error = L"配置文件为空或无法读取：" + path;
     }
     return false;
   }
@@ -276,28 +276,28 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
   std::string proxy = ExtractObject(json, "proxy");
   if (proxy.empty()) {
     if (error) {
-      *error = L"Missing or invalid proxy object";
+      *error = L"缺少 proxy 配置对象，或其 JSON 结构无效";
     }
     return false;
   }
   if (!ExtractString(proxy, "type", &value) ||
       (ToLower(Trim(value)) != "http" && ToLower(Trim(value)) != "socks5")) {
     if (error) {
-      *error = L"proxy.type must be http or socks5";
+      *error = L"proxy.type（连接方式）只能是 http 或 socks5";
     }
     return false;
   }
   parsed.proxy.type = ProxyTypeFromString(value);
   if (!ExtractString(proxy, "host", &value) || Trim(value).empty()) {
     if (error) {
-      *error = L"proxy.host must not be empty";
+      *error = L"proxy.host（代理地址）不能为空";
     }
     return false;
   }
   parsed.proxy.host = Trim(value);
   if (!ExtractInt(proxy, "port", &int_value) || int_value < 1 || int_value > 65535) {
     if (error) {
-      *error = L"proxy.port must be between 1 and 65535";
+      *error = L"proxy.port（本地监听端口）必须在 1 到 65535 之间";
     }
     return false;
   }
@@ -306,7 +306,7 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
   auto bypass_list = ExtractStringArray(json, "bypass_list");
   if (bypass_list.empty()) {
     if (error) {
-      *error = L"bypass_list must contain at least one entry";
+      *error = L"bypass_list（直连列表）至少需要保留一项";
     }
     return false;
   }
@@ -314,7 +314,7 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
 
   if (!ExtractBool(json, "disable_quic", &bool_value)) {
     if (error) {
-      *error = L"disable_quic must be true or false";
+      *error = L"disable_quic（禁用 QUIC）必须是 true 或 false";
     }
     return false;
   }

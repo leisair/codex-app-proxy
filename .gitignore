@@ -1,5 +1,6 @@
 build/
 out/
+.qa/
 .vs/
 *.user
 *.obj

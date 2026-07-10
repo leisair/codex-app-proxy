@@ -4,8 +4,13 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -26,22 +31,57 @@ jobs:
         shell: pwsh
         run: cmake --build build --config Release
 
-      - name: Test
+      - name: Test C++
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Verify offline guide
+        shell: pwsh
+        run: node tests/verify-start-here.mjs resources/START-HERE.html resources/default_config.json
 
       - name: Package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
           Copy-Item -Force build\Release\CodexProxyLauncher.exe out\
-          Copy-Item -Force resources\config-web.html out\
+          Copy-Item -Force resources\START-HERE.html out\
           Copy-Item -Force resources\default_config.json out\config.json
           Copy-Item -Force README.md out\
 
-      - name: Upload artifact
+      - name: Verify package contents
+        shell: pwsh
+        run: .\tests\verify-package.ps1 -Path out
+
+      - name: Upload development artifact
         uses: actions/upload-artifact@v4
         with:
           name: codex-app-proxy-windows-x64
           path: out/*
           if-no-files-found: error
+
+      - name: Build release archive
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME
+          $base = "ChatGPT-Codex-Proxy-Launcher-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $zip = Join-Path dist "$base.zip"
+          Compress-Archive -Path out\* -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+          "$hash  $base.zip" | Set-Content -Encoding ascii (Join-Path dist "$base.sha256")
+          Expand-Archive -LiteralPath $zip -DestinationPath dist\verify
+          .\tests\verify-package.ps1 -Path dist\verify
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:GITHUB_REF_NAME
+          $base = "ChatGPT-Codex-Proxy-Launcher-$version-windows-x64"
+          gh release create $version "dist/$base.zip" "dist/$base.sha256" `
+            --title "$version" `
+            --notes-file .github/release-notes.md `
+            --verify-tag
