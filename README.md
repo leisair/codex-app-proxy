@@ -2,19 +2,93 @@
 
 Windows-only per-app proxy launcher for the Codex desktop app.
 
-The launcher starts the Codex Microsoft Store app executable with Chromium
-proxy flags and process-local proxy environment variables. It does not change
-the Windows system proxy and does not require TUN mode. The default target is a
-local HTTP/SOCKS mixed proxy such as V2RayN on `127.0.0.1:10808`.
+This project packages the launch command that has proven to work for Codex
+desktop: start `Codex.exe` with Chromium proxy flags. It does not change the
+Windows system proxy, does not require TUN mode, and does not modify Codex
+process memory.
 
-## Status
+The default target is V2RayN mixed proxy on `127.0.0.1:10808`.
 
-This is an early v1 implementation. It is intentionally scoped to Codex:
+## What It Does
 
-- Default mode does not inject DLLs.
-- No service, no tray process, no auto-start, and no global proxy changes.
-- Localhost and private network destinations are bypassed by default.
-- `--hook` keeps the older experimental DLL hook path for diagnostics only.
+- Locates the Microsoft Store Codex app executable.
+- Starts Codex with `--proxy-server=...`.
+- Adds a Chromium `--proxy-bypass-list=...` for localhost and private networks.
+- Adds `--disable-quic` by default.
+- Optionally sets `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` only for the
+  Codex process when `set_proxy_environment` is enabled.
+
+It is intentionally not a transparent proxy, system proxy manager, TUN tool,
+tray app, or background service.
+
+## Equivalent Manual Command
+
+The launcher is equivalent to this PowerShell flow with default config:
+
+```powershell
+$codex = Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\Codex.exe"
+& $codex --proxy-server="http://127.0.0.1:10808" --proxy-bypass-list="<-loopback>;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*" --disable-quic
+```
+
+The value of this project is making that command repeatable, configurable, and
+less error-prone.
+
+## Use
+
+1. Keep V2RayN running with mixed port `127.0.0.1:10808`.
+2. Close existing Codex desktop app processes.
+3. Run `CodexProxyLauncher.exe`.
+
+On first run, the launcher creates:
+
+```text
+%USERPROFILE%\.codex-proxy\config.json
+```
+
+You can edit the JSON directly or open `config-web.html` locally to import,
+edit, validate, and export the same config format. The HTML file is static and
+does not start a local server.
+
+## Config
+
+```json
+{
+  "_comment": "Codex Proxy Launcher configuration",
+  "_version": 1,
+  "log_level": "info",
+  "proxy": {
+    "type": "http",
+    "host": "127.0.0.1",
+    "port": 10808
+  },
+  "bypass_list": [
+    "<-loopback>",
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "10.*",
+    "172.16.*",
+    "172.17.*",
+    "172.18.*",
+    "172.19.*",
+    "172.20.*",
+    "172.21.*",
+    "172.22.*",
+    "172.23.*",
+    "172.24.*",
+    "172.25.*",
+    "172.26.*",
+    "172.27.*",
+    "172.28.*",
+    "172.29.*",
+    "172.30.*",
+    "172.31.*",
+    "192.168.*"
+  ],
+  "disable_quic": true,
+  "set_proxy_environment": false
+}
+```
 
 ## Build
 
@@ -29,41 +103,17 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-Outputs are under `build\Release`.
-
-### GitHub Actions build
-
-Pushing to `main` runs `.github/workflows/windows-build.yml` on
-`windows-latest`. The workflow uploads `codex-app-proxy-windows-x64.zip`
-containing:
-
-- `CodexProxyLauncher.exe`
-- `codex_proxy_hook.dll` for optional `--hook` diagnostics
-- `config-web.html`
-- `config.json`
-
-## Use
-
-1. Keep V2RayN running with a mixed HTTP/SOCKS port on `127.0.0.1:10808`.
-2. Run `CodexProxyLauncher.exe`.
-3. If `%USERPROFILE%\.codex-proxy\config.json` does not exist, the launcher
-   creates it with safe defaults and continues.
-
-The launcher passes these settings only to the Codex process:
-
-- `--proxy-server=...`
-- `--proxy-bypass-list=...`
-- `--disable-quic`
-- `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and lowercase variants
-
-Legacy hook mode is available for diagnostics:
+Or:
 
 ```powershell
-.\CodexProxyLauncher.exe --hook
+.\build.ps1
 ```
 
-Open `resources/config-web.html` locally to import, edit, and export
-`config.json`. The HTML file does not start a local server.
+The packaged output contains:
+
+- `CodexProxyLauncher.exe`
+- `config-web.html`
+- `config.json`
 
 ## Verify
 

@@ -23,7 +23,6 @@ if (-not $SkipTests) {
 $output = Join-Path $root "out"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 Copy-Item -Force (Join-Path $build "$Config\CodexProxyLauncher.exe") $output
-Copy-Item -Force (Join-Path $build "$Config\codex_proxy_hook.dll") $output
 Copy-Item -Force (Join-Path $root "resources\config-web.html") $output
 Copy-Item -Force (Join-Path $root "resources\default_config.json") (Join-Path $output "config.json")
 

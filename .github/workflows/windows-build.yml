@@ -35,7 +35,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
           Copy-Item -Force build\Release\CodexProxyLauncher.exe out\
-          Copy-Item -Force build\Release\codex_proxy_hook.dll out\
           Copy-Item -Force resources\config-web.html out\
           Copy-Item -Force resources\default_config.json out\config.json
 

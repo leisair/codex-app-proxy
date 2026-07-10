@@ -186,35 +186,17 @@ std::string SerializeConfig(const AppConfig& config) {
   out << "    \"host\": \"" << JsonEscape(config.proxy.host) << "\",\n";
   out << "    \"port\": " << config.proxy.port << "\n";
   out << "  },\n";
-  out << "  \"target_processes\": [";
-  for (size_t i = 0; i < config.target_processes.size(); ++i) {
+  out << "  \"bypass_list\": [";
+  for (size_t i = 0; i < config.bypass_list.size(); ++i) {
     if (i != 0) {
       out << ", ";
     }
-    out << "\"" << JsonEscape(config.target_processes[i]) << "\"";
+    out << "\"" << JsonEscape(config.bypass_list[i]) << "\"";
   }
   out << "],\n";
-  out << "  \"child_injection\": " << (config.child_injection ? "true" : "false") << ",\n";
-  out << "  \"child_injection_mode\": \"" << JsonEscape(config.child_injection_mode) << "\",\n";
-  out << "  \"bypass\": {\n";
-  out << "    \"localhost\": " << (config.bypass.localhost ? "true" : "false") << ",\n";
-  out << "    \"private_networks\": " << (config.bypass.private_networks ? "true" : "false") << ",\n";
-  out << "    \"proxy_endpoint\": " << (config.bypass.proxy_endpoint ? "true" : "false") << "\n";
-  out << "  },\n";
-  out << "  \"fake_ip\": {\n";
-  out << "    \"enabled\": " << (config.fake_ip.enabled ? "true" : "false") << ",\n";
-  out << "    \"cidr\": \"" << JsonEscape(config.fake_ip.cidr) << "\"\n";
-  out << "  },\n";
-  out << "  \"proxy_rules\": {\n";
-  out << "    \"dns_mode\": \"" << JsonEscape(config.proxy_rules.dns_mode) << "\",\n";
-  out << "    \"ipv6_mode\": \"" << (config.proxy_rules.ipv6_mode == IpMode::Proxy ? "proxy" : config.proxy_rules.ipv6_mode == IpMode::Direct ? "direct" : "block") << "\",\n";
-  out << "    \"udp_mode\": \"" << (config.proxy_rules.udp_mode == UdpMode::Direct ? "direct" : "block") << "\"\n";
-  out << "  },\n";
-  out << "  \"timeout\": {\n";
-  out << "    \"connect\": " << config.timeout.connect_ms << ",\n";
-  out << "    \"send\": " << config.timeout.send_ms << ",\n";
-  out << "    \"recv\": " << config.timeout.recv_ms << "\n";
-  out << "  }\n";
+  out << "  \"disable_quic\": " << (config.disable_quic ? "true" : "false") << ",\n";
+  out << "  \"set_proxy_environment\": "
+      << (config.set_proxy_environment ? "true" : "false") << "\n";
   out << "}\n";
   return out.str();
 }
@@ -271,81 +253,20 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
     }
   }
 
-  auto targets = ExtractStringArray(json, "target_processes");
-  if (!targets.empty()) {
-    parsed.target_processes = targets;
+  auto bypass_list = ExtractStringArray(json, "bypass_list");
+  if (!bypass_list.empty()) {
+    parsed.bypass_list = bypass_list;
   }
 
-  if (ExtractBool(json, "child_injection", &bool_value)) {
-    parsed.child_injection = bool_value;
+  if (ExtractBool(json, "disable_quic", &bool_value)) {
+    parsed.disable_quic = bool_value;
   }
-  if (ExtractString(json, "child_injection_mode", &value)) {
-    parsed.child_injection_mode = ToLower(Trim(value));
-  }
-
-  std::string bypass = ExtractObject(json, "bypass");
-  if (!bypass.empty()) {
-    if (ExtractBool(bypass, "localhost", &bool_value)) {
-      parsed.bypass.localhost = bool_value;
-    }
-    if (ExtractBool(bypass, "private_networks", &bool_value)) {
-      parsed.bypass.private_networks = bool_value;
-    }
-    if (ExtractBool(bypass, "proxy_endpoint", &bool_value)) {
-      parsed.bypass.proxy_endpoint = bool_value;
-    }
-  }
-
-  std::string fake_ip = ExtractObject(json, "fake_ip");
-  if (!fake_ip.empty()) {
-    if (ExtractBool(fake_ip, "enabled", &bool_value)) {
-      parsed.fake_ip.enabled = bool_value;
-    }
-    if (ExtractString(fake_ip, "cidr", &value)) {
-      parsed.fake_ip.cidr = Trim(value);
-    }
-  }
-
-  std::string rules = ExtractObject(json, "proxy_rules");
-  if (!rules.empty()) {
-    if (ExtractString(rules, "dns_mode", &value)) {
-      parsed.proxy_rules.dns_mode = ToLower(Trim(value));
-    }
-    if (ExtractString(rules, "ipv6_mode", &value)) {
-      value = ToLower(Trim(value));
-      parsed.proxy_rules.ipv6_mode =
-          value == "proxy" ? IpMode::Proxy : value == "direct" ? IpMode::Direct : IpMode::Block;
-    }
-    if (ExtractString(rules, "udp_mode", &value)) {
-      parsed.proxy_rules.udp_mode = ToLower(Trim(value)) == "direct" ? UdpMode::Direct : UdpMode::Block;
-    }
-  }
-
-  std::string timeout = ExtractObject(json, "timeout");
-  if (!timeout.empty()) {
-    if (ExtractInt(timeout, "connect", &int_value) && int_value > 0) {
-      parsed.timeout.connect_ms = int_value;
-    }
-    if (ExtractInt(timeout, "send", &int_value) && int_value > 0) {
-      parsed.timeout.send_ms = int_value;
-    }
-    if (ExtractInt(timeout, "recv", &int_value) && int_value > 0) {
-      parsed.timeout.recv_ms = int_value;
-    }
+  if (ExtractBool(json, "set_proxy_environment", &bool_value)) {
+    parsed.set_proxy_environment = bool_value;
   }
 
   *config = parsed;
   return true;
-}
-
-bool IsAllowedProcess(const AppConfig& config, const std::wstring& process_name) {
-  std::wstring lower = ToLower(GetBaseName(process_name));
-  for (const auto& item : config.target_processes) {
-    if (lower == ToLower(Utf8ToWide(item))) {
-      return true;
-    }
-  }
-  return false;
 }
 
 }  // namespace codex_proxy

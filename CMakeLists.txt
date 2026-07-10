@@ -16,14 +16,6 @@ if(MSVC)
   endif()
 endif()
 
-include(FetchContent)
-FetchContent_Declare(
-  minhook
-  GIT_REPOSITORY https://github.com/TsudaKageyu/minhook.git
-  GIT_TAG v1.3.4
-)
-FetchContent_MakeAvailable(minhook)
-
 add_library(codex_proxy_common STATIC
   src/common/config.cpp
   src/common/logging.cpp
@@ -35,29 +27,16 @@ target_include_directories(codex_proxy_common PUBLIC src)
 add_executable(CodexProxyLauncher
   src/launcher/main.cpp
 )
-target_link_libraries(CodexProxyLauncher PRIVATE codex_proxy_common shell32)
-
-add_library(codex_proxy_hook SHARED
-  src/hook/dllmain.cpp
-  src/hook/hooks.cpp
-  src/hook/proxy_tunnel.cpp
-)
-target_link_libraries(codex_proxy_hook PRIVATE codex_proxy_common minhook ws2_32)
-target_compile_definitions(codex_proxy_hook PRIVATE CODEX_PROXY_HOOK_EXPORTS)
-
-set_target_properties(codex_proxy_hook PROPERTIES
-  PREFIX ""
-  OUTPUT_NAME "codex_proxy_hook"
-)
+target_link_libraries(CodexProxyLauncher PRIVATE codex_proxy_common)
 
 if(CODEX_PROXY_BUILD_TESTS)
   enable_testing()
   add_executable(codex_proxy_tests
     tests/config_tests.cpp
   )
-  target_link_libraries(codex_proxy_tests PRIVATE codex_proxy_common ws2_32)
+  target_link_libraries(codex_proxy_tests PRIVATE codex_proxy_common)
   add_test(NAME codex_proxy_tests COMMAND codex_proxy_tests)
 endif()
 
-install(TARGETS CodexProxyLauncher codex_proxy_hook RUNTIME DESTINATION . LIBRARY DESTINATION .)
+install(TARGETS CodexProxyLauncher RUNTIME DESTINATION .)
 install(FILES resources/config-web.html resources/default_config.json DESTINATION .)

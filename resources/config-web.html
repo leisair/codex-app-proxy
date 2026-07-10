@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Codex Proxy Config</title>
+  <title>Codex Proxy Launcher Config</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -37,7 +37,7 @@
       width: min(1100px, calc(100vw - 32px));
       margin: 24px auto;
       display: grid;
-      grid-template-columns: 1fr 380px;
+      grid-template-columns: 1fr 400px;
       gap: 18px;
     }
     h1 { font-size: 22px; margin: 0 0 8px; }
@@ -55,6 +55,7 @@
       gap: 12px;
     }
     label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+    .check { display: flex; gap: 8px; align-items: center; }
     input, select, textarea, button {
       font: inherit;
       border-radius: 6px;
@@ -65,7 +66,7 @@
     }
     textarea {
       width: 100%;
-      min-height: 360px;
+      min-height: 320px;
       resize: vertical;
       font-family: Consolas, "SFMono-Regular", monospace;
       font-size: 12px;
@@ -82,7 +83,6 @@
       border-color: var(--line);
     }
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .status { color: var(--muted); font-size: 13px; min-height: 20px; }
     .status.bad { color: var(--bad); }
     code {
@@ -96,14 +96,15 @@
     }
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
-      .grid, .checks { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <main>
     <div>
-      <h1>Codex Proxy Config</h1>
+      <h1>Codex Proxy Launcher Config</h1>
+
       <section>
         <h2>代理</h2>
         <div class="grid">
@@ -120,48 +121,22 @@
             <input id="proxyPort" type="number" min="1" max="65535" value="10808">
           </label>
         </div>
-        <p class="status">V2RayN mixed 端口通常可直接使用 HTTP / mixed + 127.0.0.1:10808。</p>
+        <p class="status">V2RayN mixed 端口通常使用 HTTP / mixed + 127.0.0.1:10808。</p>
       </section>
 
       <section>
-        <h2>注入与目标进程</h2>
-        <div class="checks">
-          <label><input id="childInjection" type="checkbox" checked> 注入 Codex 子进程</label>
-          <label><input id="fakeIp" type="checkbox"> 启用 FakeIP 远程 DNS</label>
-        </div>
-        <label style="margin-top:12px;">目标进程 allowlist，逗号分隔
-          <input id="targets" value="Codex.exe,codex.exe">
+        <h2>启动参数</h2>
+        <label>Chromium proxy bypass list，每行一条
+          <textarea id="bypassList"></textarea>
         </label>
-      </section>
-
-      <section>
-        <h2>路由策略</h2>
-        <div class="grid">
-          <label>DNS
-            <select id="dnsMode">
-              <option value="proxy">proxy</option>
-              <option value="direct">direct</option>
-            </select>
-          </label>
-          <label>IPv6
-            <select id="ipv6Mode">
-              <option value="block">block</option>
-              <option value="direct">direct</option>
-              <option value="proxy">proxy</option>
-            </select>
-          </label>
-          <label>UDP
-            <select id="udpMode">
-              <option value="block">block</option>
-              <option value="direct">direct</option>
-            </select>
-          </label>
-        </div>
-        <div class="checks" style="margin-top:12px;">
-          <label><input id="bypassLocalhost" type="checkbox" checked> bypass localhost</label>
-          <label><input id="bypassPrivate" type="checkbox" checked> bypass private networks</label>
-          <label><input id="bypassProxy" type="checkbox" checked> bypass proxy endpoint</label>
-        </div>
+        <label class="check" style="margin-top:12px;">
+          <input id="disableQuic" type="checkbox" checked>
+          启动 Codex 时加入 --disable-quic
+        </label>
+        <label class="check" style="margin-top:8px;">
+          <input id="setProxyEnvironment" type="checkbox">
+          同时给 Codex 进程设置 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY
+        </label>
       </section>
 
       <section>
@@ -178,11 +153,9 @@
       </section>
 
       <section>
-        <h2>验证命令</h2>
-        <code>$ids = Get-Process | Where-Object { $_.ProcessName -match '^Codex$|^codex$' } | Select-Object -ExpandProperty Id
-Get-NetTCPConnection -OwningProcess $ids -ErrorAction SilentlyContinue |
-  Select-Object OwningProcess,LocalAddress,LocalPort,RemoteAddress,RemotePort,State |
-  Sort-Object OwningProcess,RemoteAddress</code>
+        <h2>等价验证命令</h2>
+        <code>$codex = Join-Path (Get-AppxPackage -Name OpenAI.Codex).InstallLocation "app\Codex.exe"
+& $codex --proxy-server="http://127.0.0.1:10808" --proxy-bypass-list="&lt;-loopback&gt;;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*" --disable-quic</code>
       </section>
     </div>
 
@@ -194,9 +167,16 @@ Get-NetTCPConnection -OwningProcess $ids -ErrorAction SilentlyContinue |
 
   <script>
     const $ = (id) => document.getElementById(id);
+    const defaultBypass = [
+      '<-loopback>', 'localhost', '127.0.0.1', '::1',
+      '10.*', '172.16.*', '172.17.*', '172.18.*', '172.19.*',
+      '172.20.*', '172.21.*', '172.22.*', '172.23.*', '172.24.*',
+      '172.25.*', '172.26.*', '172.27.*', '172.28.*', '172.29.*',
+      '172.30.*', '172.31.*', '192.168.*'
+    ];
 
-    function splitTargets(value) {
-      return value.split(',').map(v => v.trim()).filter(Boolean);
+    function parseLines(value) {
+      return value.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
     }
 
     function buildConfig() {
@@ -209,28 +189,9 @@ Get-NetTCPConnection -OwningProcess $ids -ErrorAction SilentlyContinue |
           host: $('proxyHost').value.trim() || '127.0.0.1',
           port: Number($('proxyPort').value || 10808)
         },
-        target_processes: splitTargets($('targets').value),
-        child_injection: $('childInjection').checked,
-        child_injection_mode: 'filtered',
-        bypass: {
-          localhost: $('bypassLocalhost').checked,
-          private_networks: $('bypassPrivate').checked,
-          proxy_endpoint: $('bypassProxy').checked
-        },
-        fake_ip: {
-          enabled: $('fakeIp').checked,
-          cidr: '198.18.0.0/15'
-        },
-        proxy_rules: {
-          dns_mode: $('dnsMode').value,
-          ipv6_mode: $('ipv6Mode').value,
-          udp_mode: $('udpMode').value
-        },
-        timeout: {
-          connect: 5000,
-          send: 5000,
-          recv: 5000
-        }
+        bypass_list: parseLines($('bypassList').value),
+        disable_quic: $('disableQuic').checked,
+        set_proxy_environment: $('setProxyEnvironment').checked
       };
     }
 
@@ -238,8 +199,7 @@ Get-NetTCPConnection -OwningProcess $ids -ErrorAction SilentlyContinue |
       if (!['http', 'socks5'].includes(config.proxy.type)) return '代理协议必须是 http 或 socks5';
       if (!config.proxy.host) return '代理地址不能为空';
       if (!Number.isInteger(config.proxy.port) || config.proxy.port < 1 || config.proxy.port > 65535) return '代理端口必须是 1-65535';
-      if (!config.target_processes.length) return '至少保留一个目标进程';
-      if (!config.target_processes.every(p => ['codex.exe'].includes(p.toLowerCase()))) return 'v1 只允许 Codex.exe / codex.exe';
+      if (!config.bypass_list.length) return '至少保留 localhost / 内网 bypass，避免本地连接被代理';
       return '';
     }
 
@@ -255,33 +215,31 @@ Get-NetTCPConnection -OwningProcess $ids -ErrorAction SilentlyContinue |
       $('proxyType').value = config.proxy?.type || 'http';
       $('proxyHost').value = config.proxy?.host || '127.0.0.1';
       $('proxyPort').value = config.proxy?.port || 10808;
-      $('targets').value = (config.target_processes || ['Codex.exe', 'codex.exe']).join(',');
-      $('childInjection').checked = config.child_injection !== false;
-      $('fakeIp').checked = !!config.fake_ip?.enabled;
-      $('dnsMode').value = config.proxy_rules?.dns_mode || 'proxy';
-      $('ipv6Mode').value = config.proxy_rules?.ipv6_mode || 'block';
-      $('udpMode').value = config.proxy_rules?.udp_mode || 'block';
-      $('bypassLocalhost').checked = config.bypass?.localhost !== false;
-      $('bypassPrivate').checked = config.bypass?.private_networks !== false;
-      $('bypassProxy').checked = config.bypass?.proxy_endpoint !== false;
+      $('bypassList').value = (config.bypass_list || defaultBypass).join('\n');
+      $('disableQuic').checked = config.disable_quic !== false;
+      $('setProxyEnvironment').checked = !!config.set_proxy_environment;
       refreshJson();
     }
 
-    document.querySelectorAll('input,select').forEach(el => el.addEventListener('input', refreshJson));
+    document.querySelectorAll('input,select,textarea').forEach(el => {
+      el.addEventListener('input', refreshJson);
+    });
     $('preset').addEventListener('click', () => {
       applyConfig({
         proxy: { type: 'http', host: '127.0.0.1', port: 10808 },
-        target_processes: ['Codex.exe', 'codex.exe'],
-        child_injection: true,
-        fake_ip: { enabled: false },
-        proxy_rules: { dns_mode: 'proxy', ipv6_mode: 'block', udp_mode: 'block' },
-        bypass: { localhost: true, private_networks: true, proxy_endpoint: true }
+        bypass_list: defaultBypass,
+        disable_quic: true,
+        set_proxy_environment: false
       });
     });
     $('download').addEventListener('click', () => {
       const config = buildConfig();
       const error = validate(config);
-      if (error) { $('status').textContent = error; $('status').className = 'status bad'; return; }
+      if (error) {
+        $('status').textContent = error;
+        $('status').className = 'status bad';
+        return;
+      }
       const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -306,7 +264,12 @@ Get-NetTCPConnection -OwningProcess $ids -ErrorAction SilentlyContinue |
       }
     });
 
-    refreshJson();
+    applyConfig({
+      proxy: { type: 'http', host: '127.0.0.1', port: 10808 },
+      bypass_list: defaultBypass,
+      disable_quic: true,
+      set_proxy_environment: false
+    });
   </script>
 </body>
 </html>

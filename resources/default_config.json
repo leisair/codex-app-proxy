@@ -7,29 +7,30 @@
     "host": "127.0.0.1",
     "port": 10808
   },
-  "target_processes": [
-    "Codex.exe",
-    "codex.exe"
+  "bypass_list": [
+    "<-loopback>",
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "10.*",
+    "172.16.*",
+    "172.17.*",
+    "172.18.*",
+    "172.19.*",
+    "172.20.*",
+    "172.21.*",
+    "172.22.*",
+    "172.23.*",
+    "172.24.*",
+    "172.25.*",
+    "172.26.*",
+    "172.27.*",
+    "172.28.*",
+    "172.29.*",
+    "172.30.*",
+    "172.31.*",
+    "192.168.*"
   ],
-  "child_injection": true,
-  "child_injection_mode": "filtered",
-  "bypass": {
-    "localhost": true,
-    "private_networks": true,
-    "proxy_endpoint": true
-  },
-  "fake_ip": {
-    "enabled": false,
-    "cidr": "198.18.0.0/15"
-  },
-  "proxy_rules": {
-    "dns_mode": "proxy",
-    "ipv6_mode": "block",
-    "udp_mode": "block"
-  },
-  "timeout": {
-    "connect": 5000,
-    "send": 5000,
-    "recv": 5000
-  }
+  "disable_quic": true,
+  "set_proxy_environment": false
 }

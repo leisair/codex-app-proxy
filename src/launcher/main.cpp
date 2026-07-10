@@ -4,12 +4,9 @@
 #include "common/string_utils.h"
 
 #include <algorithm>
-#include <iostream>
 #include <filesystem>
-#include <set>
-#include <shellapi.h>
+#include <iostream>
 #include <string>
-#include <thread>
 #include <vector>
 #include <windows.h>
 
@@ -18,8 +15,6 @@ using namespace codex_proxy;
 namespace {
 
 struct Args {
-  bool attach_existing = false;
-  bool hook_mode = false;
   std::wstring config_path = DefaultConfigPath();
   std::wstring codex_path;
 };
@@ -28,12 +23,7 @@ Args ParseArgs(int argc, wchar_t** argv) {
   Args args;
   for (int i = 1; i < argc; ++i) {
     std::wstring arg = argv[i];
-    if (arg == L"--attach-existing") {
-      args.attach_existing = true;
-      args.hook_mode = true;
-    } else if (arg == L"--hook") {
-      args.hook_mode = true;
-    } else if (arg == L"--config" && i + 1 < argc) {
+    if (arg == L"--config" && i + 1 < argc) {
       args.config_path = argv[++i];
     } else if (arg == L"--codex" && i + 1 < argc) {
       args.codex_path = argv[++i];
@@ -42,53 +32,21 @@ Args ParseArgs(int argc, wchar_t** argv) {
   return args;
 }
 
-std::wstring HookDllPath() {
-  std::wstring dir = GetDirName(GetCurrentModulePath());
-  std::wstring path = dir + L"\\codex_proxy_hook.dll";
-  if (FileExists(path)) {
-    return path;
-  }
-  return std::filesystem::current_path().wstring() + L"\\codex_proxy_hook.dll";
-}
-
-std::wstring AppUserModelIdFromCodexPath(const std::wstring& codex_path) {
-  std::filesystem::path path(codex_path);
-  for (const auto& part : path) {
-    std::wstring name = part.wstring();
-    if (name.rfind(L"OpenAI.Codex_", 0) != 0) {
-      continue;
-    }
-    size_t publisher = name.rfind(L"__");
-    if (publisher == std::wstring::npos) {
-      continue;
-    }
-    size_t version_sep = name.find(L"_", std::wstring(L"OpenAI.Codex_").size());
-    if (version_sep == std::wstring::npos || version_sep >= publisher) {
-      continue;
-    }
-    std::wstring package_name = name.substr(0, std::wstring(L"OpenAI.Codex").size());
-    std::wstring publisher_id = name.substr(publisher + 2);
-    return package_name + L"_" + publisher_id + L"!App";
-  }
-  return L"OpenAI.Codex_2p2nqsd0c76g0!App";
-}
-
-int InjectProcessByPid(DWORD pid, const std::wstring& dll_path);
-
 std::wstring ProxyUrl(const AppConfig& config) {
   return Utf8ToWide(ProxyTypeToString(config.proxy.type)) + L"://" +
          Utf8ToWide(config.proxy.host) + L":" +
          std::to_wstring(config.proxy.port);
 }
 
-std::wstring ChromiumProxyServer(const AppConfig& config) {
-  return ProxyUrl(config);
-}
-
-std::wstring ChromiumBypassList() {
-  return L"<-loopback>;localhost;127.0.0.1;::1;10.*;172.16.*;172.17.*;172.18.*;"
-         L"172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;"
-         L"172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*";
+std::wstring JoinBypassList(const std::vector<std::string>& values) {
+  std::wstring result;
+  for (const auto& value : values) {
+    if (!result.empty()) {
+      result += L";";
+    }
+    result += Utf8ToWide(value);
+  }
+  return result;
 }
 
 std::wstring BuildEnvironmentBlockWithProxy(const AppConfig& config) {
@@ -120,6 +78,7 @@ std::wstring BuildEnvironmentBlockWithProxy(const AppConfig& config) {
   entries.push_back(L"all_proxy=" + proxy);
   entries.push_back(L"NO_PROXY=localhost,127.0.0.1,::1");
   entries.push_back(L"no_proxy=localhost,127.0.0.1,::1");
+
   std::sort(entries.begin(), entries.end(),
             [](const std::wstring& left, const std::wstring& right) {
               return ToLower(left) < ToLower(right);
@@ -134,259 +93,54 @@ std::wstring BuildEnvironmentBlockWithProxy(const AppConfig& config) {
   return block;
 }
 
-int StartWithAppProxy(const std::wstring& codex_path, const AppConfig& config) {
+std::wstring BuildCommandLine(const std::wstring& codex_path, const AppConfig& config) {
+  std::wstring command = L"\"" + codex_path + L"\" " +
+      L"--proxy-server=\"" + ProxyUrl(config) + L"\"";
+
+  std::wstring bypass = JoinBypassList(config.bypass_list);
+  if (!bypass.empty()) {
+    command += L" --proxy-bypass-list=\"" + bypass + L"\"";
+  }
+  if (config.disable_quic) {
+    command += L" --disable-quic";
+  }
+  return command;
+}
+
+int StartCodexWithProxy(const std::wstring& codex_path, const AppConfig& config) {
   STARTUPINFOW si{};
   si.cb = sizeof(si);
   PROCESS_INFORMATION pi{};
 
-  std::wstring proxy_server = ChromiumProxyServer(config);
-  std::wstring bypass = ChromiumBypassList();
-  std::wstring command = L"\"" + codex_path + L"\" " +
-      L"--proxy-server=\"" + proxy_server + L"\" " +
-      L"--proxy-bypass-list=\"" + bypass + L"\" " +
-      L"--disable-quic";
-  std::wstring environment = BuildEnvironmentBlockWithProxy(config);
+  std::wstring command = BuildCommandLine(codex_path, config);
+  std::wstring environment;
+  LPVOID environment_ptr = nullptr;
+  DWORD creation_flags = 0;
+  if (config.set_proxy_environment) {
+    environment = BuildEnvironmentBlockWithProxy(config);
+    if (!environment.empty()) {
+      environment_ptr = environment.data();
+      creation_flags |= CREATE_UNICODE_ENVIRONMENT;
+    }
+  }
 
   Logger::Instance().Info(L"Using Codex path: " + codex_path);
-  Logger::Instance().Info(L"Starting Codex with Chromium proxy " + proxy_server);
+  Logger::Instance().Info(L"Starting Codex with command: " + command);
   BOOL created = CreateProcessW(codex_path.c_str(), command.data(), nullptr, nullptr,
-                                FALSE, CREATE_UNICODE_ENVIRONMENT,
-                                environment.empty() ? nullptr : environment.data(),
+                                FALSE, creation_flags, environment_ptr,
                                 GetDirName(codex_path).c_str(), &si, &pi);
   if (!created) {
-    Logger::Instance().Warn(FormatLastError(L"CreateProcessW proxy launch failed",
-                                            GetLastError()));
-    std::wcerr << L"Unable to start Codex with per-app proxy.\n";
+    Logger::Instance().Warn(FormatLastError(L"CreateProcessW failed", GetLastError()));
+    std::wcerr << L"Unable to start Codex.\n";
     return 10;
   }
 
-  Logger::Instance().Info(L"Started Codex with app proxy PID " +
-                          std::to_wstring(pi.dwProcessId));
+  Logger::Instance().Info(L"Started Codex PID " + std::to_wstring(pi.dwProcessId));
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
   std::wcout << L"Codex launched with app proxy. Log: "
              << Logger::Instance().LogPath() << L"\n";
   return 0;
-}
-
-void AppendUniqueProcesses(std::vector<ProcessInfo>* target,
-                           const std::vector<ProcessInfo>& source) {
-  if (!target) {
-    return;
-  }
-  std::set<DWORD> existing;
-  for (const auto& process : *target) {
-    existing.insert(process.pid);
-  }
-  for (const auto& process : source) {
-    if (existing.insert(process.pid).second) {
-      target->push_back(process);
-    }
-  }
-}
-
-bool IsTargetDesktopChildProcess(const ProcessInfo& process) {
-  std::wstring path = ToLower(process.path);
-  std::wstring command = ToLower(process.command_line);
-  std::replace(path.begin(), path.end(), L'/', L'\\');
-  std::replace(command.begin(), command.end(), L'/', L'\\');
-
-  if (path.find(L"\\app\\resources\\codex.exe") != std::wstring::npos ||
-      command.find(L"\\app\\resources\\codex.exe") != std::wstring::npos) {
-    return command.find(L" app-server") != std::wstring::npos ||
-           command.find(L"\\resources\\codex.exe\" app-server") != std::wstring::npos;
-  }
-
-  std::wstring base = path.empty() ? ToLower(process.name) : GetBaseName(path);
-  if (base != L"codex.exe") {
-    return false;
-  }
-  return command.find(L"--type=utility") != std::wstring::npos &&
-         command.find(L"network.mojom.networkservice") != std::wstring::npos;
-}
-
-int AttachExisting(const std::wstring& codex_path, const std::wstring& dll_path) {
-  std::wstring app_dir = GetDirName(codex_path);
-  auto processes = EnumerateCodexAppProcesses(app_dir);
-  if (processes.empty()) {
-    std::wcerr << L"No running Codex desktop app processes found.\n";
-    return 2;
-  }
-
-  int injected = 0;
-  for (const auto& process_info : processes) {
-    if (!IsTargetDesktopChildProcess(process_info)) {
-      Logger::Instance().Info(L"Attach skipped PID " +
-                              std::to_wstring(process_info.pid) + L" " +
-                              process_info.command_line);
-      continue;
-    }
-    if (InjectProcessByPid(process_info.pid, dll_path) == 0) {
-      ++injected;
-      Logger::Instance().Info(L"Attached existing PID " +
-                              std::to_wstring(process_info.pid) + L" " +
-                              process_info.path);
-    }
-  }
-  std::wcout << L"Attached " << injected << L" Codex desktop app process(es).\n";
-  return injected > 0 ? 0 : 4;
-}
-
-int StartSuspendedAndInject(const std::wstring& codex_path,
-                            const std::wstring& dll_path,
-                            DWORD* launched_pid) {
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  PROCESS_INFORMATION pi{};
-  std::wstring command = L"\"" + codex_path + L"\"";
-
-  BOOL created = CreateProcessW(codex_path.c_str(), command.data(), nullptr, nullptr,
-                                FALSE, CREATE_SUSPENDED, nullptr,
-                                GetDirName(codex_path).c_str(), &si, &pi);
-  if (!created) {
-    Logger::Instance().Warn(FormatLastError(L"CreateProcessW suspended failed", GetLastError()));
-    return -1;
-  }
-
-  std::wstring error;
-  if (!InjectDllIntoProcess(pi.hProcess, dll_path, &error)) {
-    Logger::Instance().Error(L"Initial injection failed: " + error);
-    TerminateProcess(pi.hProcess, 1);
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
-    return 5;
-  }
-
-  ResumeThread(pi.hThread);
-  Logger::Instance().Info(L"Started and injected Codex PID " + std::to_wstring(pi.dwProcessId));
-  if (launched_pid) {
-    *launched_pid = pi.dwProcessId;
-  }
-  CloseHandle(pi.hThread);
-  CloseHandle(pi.hProcess);
-  return 0;
-}
-
-int ShellLaunchAndAttach(const std::wstring& codex_path, const std::wstring& dll_path,
-                         DWORD* launched_pid) {
-  Logger::Instance().Warn(
-      L"Using fallback launch + attach. Earliest startup requests may not be covered.");
-  DWORD before = FindNewestProcessIdByPath(codex_path);
-  HINSTANCE result = ShellExecuteW(nullptr, L"open", codex_path.c_str(), nullptr,
-                                   GetDirName(codex_path).c_str(), SW_SHOWNORMAL);
-  if (reinterpret_cast<INT_PTR>(result) <= 32) {
-    std::wstring app_uri = L"shell:AppsFolder\\" + AppUserModelIdFromCodexPath(codex_path);
-    Logger::Instance().Warn(L"Direct ShellExecuteW failed; trying App activation " + app_uri);
-    result = ShellExecuteW(nullptr, L"open", app_uri.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-    if (reinterpret_cast<INT_PTR>(result) <= 32) {
-      std::wcerr << L"ShellExecuteW and App activation failed.\n";
-      return 6;
-    }
-  }
-
-  DWORD pid = 0;
-  for (int i = 0; i < 50; ++i) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    pid = FindNewestProcessIdByPath(codex_path, before);
-    if (pid != 0) {
-      break;
-    }
-  }
-  if (pid == 0) {
-    std::wcerr << L"Codex launched, but no new Codex.exe PID was detected.\n";
-    return 7;
-  }
-
-  HANDLE process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
-                                   PROCESS_VM_OPERATION | PROCESS_VM_WRITE |
-                                   PROCESS_VM_READ,
-                               FALSE, pid);
-  if (!process) {
-    std::wcerr << L"OpenProcess failed for fallback PID " << pid << L".\n";
-    return 8;
-  }
-  std::wstring error;
-  bool ok = InjectDllIntoProcess(process, dll_path, &error);
-  CloseHandle(process);
-  if (!ok) {
-    std::wcerr << L"Fallback injection failed: " << error << L"\n";
-    return 9;
-  }
-  if (launched_pid) {
-    *launched_pid = pid;
-  }
-  return 0;
-}
-
-int InjectProcessByPid(DWORD pid, const std::wstring& dll_path) {
-  HANDLE process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
-                                   PROCESS_VM_OPERATION | PROCESS_VM_WRITE |
-                                   PROCESS_VM_READ,
-                               FALSE, pid);
-  if (!process) {
-    Logger::Instance().Warn(FormatLastError(L"OpenProcess failed for PID " +
-                                                std::to_wstring(pid),
-                                            GetLastError()));
-    return 1;
-  }
-  std::wstring error;
-  bool ok = InjectDllIntoProcess(process, dll_path, &error);
-  CloseHandle(process);
-  if (!ok) {
-    Logger::Instance().Warn(L"Startup sweep injection failed for PID " +
-                            std::to_wstring(pid) + L": " + error);
-    return 2;
-  }
-  return 0;
-}
-
-void StartupInjectionSweep(const std::wstring& codex_path,
-                           const std::wstring& dll_path,
-                           DWORD launched_pid) {
-  std::wstring app_dir = GetDirName(codex_path);
-  std::set<DWORD> seen;
-
-  Logger::Instance().Info(L"Starting 180s startup injection sweep for " + app_dir);
-  if (launched_pid != 0) {
-    Logger::Instance().Info(L"Startup sweep launched PID hint " +
-                            std::to_wstring(launched_pid));
-  }
-  size_t last_candidate_count = static_cast<size_t>(-1);
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(180);
-  while (std::chrono::steady_clock::now() < deadline) {
-    auto processes = EnumerateCodexAppProcesses(app_dir);
-    if (launched_pid != 0) {
-      AppendUniqueProcesses(&processes, EnumerateCodexProcessTree(launched_pid));
-    }
-    if (processes.size() != last_candidate_count) {
-      last_candidate_count = processes.size();
-      Logger::Instance().Info(L"Startup sweep sees " +
-                              std::to_wstring(processes.size()) +
-                              L" Codex app process candidate(s)");
-      for (const auto& process : processes) {
-        Logger::Instance().Info(L"Startup sweep candidate PID " +
-                                std::to_wstring(process.pid) + L" parent " +
-                                std::to_wstring(process.parent_pid) + L" " +
-                                process.command_line);
-      }
-    }
-
-    for (const auto& process : processes) {
-      if (seen.count(process.pid) != 0) {
-        continue;
-      }
-      if (!IsTargetDesktopChildProcess(process)) {
-        continue;
-      }
-      seen.insert(process.pid);
-      if (InjectProcessByPid(process.pid, dll_path) == 0) {
-        Logger::Instance().Info(L"Startup sweep injected PID " +
-                                std::to_wstring(process.pid) + L" " + process.path);
-      }
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
-  }
-  Logger::Instance().Info(L"Startup injection sweep complete");
 }
 
 }  // namespace
@@ -413,36 +167,10 @@ int wmain(int argc, wchar_t** argv) {
     return 3;
   }
 
-  std::wstring dll_path = HookDllPath();
-  if (args.hook_mode && !FileExists(dll_path)) {
-    std::wcerr << L"Missing codex_proxy_hook.dll next to launcher: " << dll_path << L"\n";
-    return 1;
-  }
-
-  if (args.attach_existing) {
-    return AttachExisting(codex_path, dll_path);
-  }
-
   if (AnyProcessRunningAtPath(codex_path)) {
-    std::wcerr << L"Codex desktop app is already running. Close Codex desktop first, "
-                  L"or use --attach-existing for diagnostic attach mode.\n";
+    std::wcerr << L"Codex desktop app is already running. Close Codex desktop first.\n";
     return 2;
   }
 
-  if (!args.hook_mode) {
-    return StartWithAppProxy(codex_path, config);
-  }
-
-  Logger::Instance().Info(L"Using Codex path: " + codex_path);
-  DWORD launched_pid = 0;
-  int result = StartSuspendedAndInject(codex_path, dll_path, &launched_pid);
-  if (result == -1) {
-    result = ShellLaunchAndAttach(codex_path, dll_path, &launched_pid);
-  }
-  if (result == 0) {
-    StartupInjectionSweep(codex_path, dll_path, launched_pid);
-    std::wcout << L"Codex launched through proxy hook. Log: "
-               << Logger::Instance().LogPath() << L"\n";
-  }
-  return result;
+  return StartCodexWithProxy(codex_path, config);
 }
