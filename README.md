@@ -8,7 +8,7 @@
 
 *A portable Windows launcher that starts the Microsoft Store ChatGPT/Codex app with a per-app proxy.*
 
-> [下载最新版](https://github.com/leisair/codex-app-proxy/releases/latest) · 下载 `windows-x64.zip`，解压后打开 `START-HERE.html`
+> [下载最新版](https://github.com/leisair/codex-app-proxy/releases/latest) · [版本记录](CHANGELOG.md) · 下载 `windows-x64.zip`，解压后打开 `START-HERE.html`
 
 ![START-HERE 离线配置向导](https://raw.githubusercontent.com/leisair/codex-app-proxy/main/docs/images/start-here.png)
 
@@ -78,9 +78,8 @@ ZIP 根目录直接包含以下文件，没有第二层 ZIP：
 | `CodexProxyLauncher.exe` | 检查环境并启动 ChatGPT/Codex | 每次通过代理启动时双击 |
 | `config.json` | 启动器实际读取的配置 | 通常通过向导生成，不必手改 |
 | `README.md` | 本页面的离线副本 | 按需查看 |
-| `logs/` | 默认仅在启动出错时生成的诊断日志目录 | 仅排错时查看 |
 
-配置和日志都保存在这个便携文件夹内；项目不会创建 `%USERPROFILE%\.codex-proxy`。
+运行后可能在同目录生成 `logs/`：默认仅在启动出错时创建，具体由 `log_mode` 控制。配置和日志都保存在这个便携文件夹内；项目不会创建 `%USERPROFILE%\.codex-proxy`。
 
 ## 配置项说明
 

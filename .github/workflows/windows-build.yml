@@ -81,7 +81,11 @@ jobs:
         run: |
           $version = $env:GITHUB_REF_NAME
           $base = "ChatGPT-Codex-Proxy-Launcher-$version-windows-x64"
+          $notes = ".github/releases/$version.md"
+          if (-not (Test-Path -LiteralPath $notes)) {
+            throw "Missing version-specific release notes: $notes"
+          }
           gh release create $version "dist/$base.zip" "dist/$base.sha256" `
             --title "$version" `
-            --notes-file .github/release-notes.md `
+            --notes-file $notes `
             --verify-tag
