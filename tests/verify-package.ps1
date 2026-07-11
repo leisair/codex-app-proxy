@@ -24,4 +24,11 @@ foreach ($name in $expected) {
   }
 }
 
+$exe = Join-Path $root "CodexProxyLauncher.exe"
+$iconCount = & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command `
+  "Add-Type -AssemblyName System.Drawing; `$icon=[System.Drawing.Icon]::ExtractAssociatedIcon('$($exe.Replace("'", "''"))'); if (`$icon) { 1 } else { 0 }"
+if ($iconCount -ne 1) {
+  throw "CodexProxyLauncher.exe does not expose an embedded application icon"
+}
+
 Write-Host "Package verification passed: $($actual -join ', ')"

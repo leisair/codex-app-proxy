@@ -30,5 +30,6 @@
     "172.31.*",
     "192.168.*"
   ],
-  "disable_quic": true
+  "disable_quic": true,
+  "log_mode": "errors"
 }

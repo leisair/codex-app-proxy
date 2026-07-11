@@ -10,10 +10,10 @@ const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
 const required = [
   'id="preset"', 'id="proxyType"', 'id="proxyHost"', 'id="proxyPort"',
-  'id="disableQuic"', 'id="bypassList"', 'id="save"', 'id="resetAll"',
+  'id="disableQuic"', 'id="logMode"', 'id="logSummary"', 'id="bypassList"', 'id="save"', 'id="resetAll"',
   'id="jsonOutput"', 'id="commandOutput"', 'V2RayN', 'Clash Verge Rev',
   'Clash / Mihomo', '通用 SOCKS5', '出厂配置', '恢复全部出厂值',
-  'START-HERE.html', 'CodexProxyLauncher.exe'
+  'START-HERE.html', 'CodexProxyLauncher.exe', '仅错误（推荐）', '始终记录', '日志已关闭'
 ];
 for (const marker of required) {
   if (!html.includes(marker)) throw new Error(`START-HERE missing marker: ${marker}`);
@@ -32,6 +32,9 @@ if (config.proxy.type !== 'http' || config.proxy.host !== '127.0.0.1' || config.
 }
 if (config.disable_quic !== true || !Array.isArray(config.bypass_list) || config.bypass_list.length < 4) {
   throw new Error('default_config.json is missing required safe defaults');
+}
+if (config.log_mode !== 'errors') {
+  throw new Error('default_config.json log_mode must default to errors');
 }
 for (const value of ['http', '127.0.0.1', '10808']) {
   if (!html.includes(value)) throw new Error(`START-HERE does not expose factory value: ${value}`);

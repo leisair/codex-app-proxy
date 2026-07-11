@@ -78,7 +78,7 @@ ZIP 根目录直接包含以下文件，没有第二层 ZIP：
 | `CodexProxyLauncher.exe` | 检查环境并启动 ChatGPT/Codex | 每次通过代理启动时双击 |
 | `config.json` | 启动器实际读取的配置 | 通常通过向导生成，不必手改 |
 | `README.md` | 本页面的离线副本 | 按需查看 |
-| `logs/` | 运行后生成的诊断日志 | 仅排错时查看 |
+| `logs/` | 默认仅在启动出错时生成的诊断日志目录 | 仅排错时查看 |
 
 配置和日志都保存在这个便携文件夹内；项目不会创建 `%USERPROFILE%\.codex-proxy`。
 
@@ -90,6 +90,7 @@ ZIP 根目录直接包含以下文件，没有第二层 ZIP：
 | `proxy.host` | `127.0.0.1` | 本地代理所在地址；该值表示当前电脑 | 普通用户不要修改 |
 | `proxy.port` | `10808` | 代理软件的本地/mixed 监听端口 | 必须与代理软件界面一致 |
 | `disable_quic` | `true` | 添加 `--disable-quic`，让 App 优先使用 TCP | 建议保持开启 |
+| `log_mode` | `errors` | 控制诊断日志：`errors` / `always` / `off` | 默认仅错误时记录，可在向导高级设置中修改 |
 | `bypass_list` | 回环地址与常见私网 | 让本地服务和内网地址不经过代理 | 不熟悉 Chromium 语法时保持默认 |
 
 向导会始终显示当前值、出厂值和恢复入口。高级用户可以展开“专家工具”检查完整 JSON 与等价 PowerShell 命令。
@@ -124,7 +125,9 @@ QUIC 使用 UDP，而常见本地 HTTP/mixed/SOCKS5 代理主要承载 TCP。禁
 logs\proxy-YYYYMMDD.log
 ```
 
-日志记录配置路径、目标 App、代理地址和错误码，不记录账号、对话或代理流量。
+出厂模式 `errors` 下，正常启动不会创建 `logs` 目录；若启动失败，启动器会把此前缓存在内存中的本次启动上下文和错误一起写入上述文件。`always` 从启动开始持续记录，适合反复排错；`off` 完全不写日志，错误弹窗会显示“日志已关闭”。旧配置缺少 `log_mode` 时按 `errors` 处理。
+
+日志可能包含配置路径、目标 App 路径、代理地址和错误码，不记录账号、对话内容或代理流量。分享前仍应自行检查其中是否含不希望公开的信息。
 
 <details>
 <summary><strong>高级用户：默认配置与手动等价命令</strong></summary>
@@ -141,7 +144,8 @@ logs\proxy-YYYYMMDD.log
     "port": 10808
   },
   "bypass_list": ["<-loopback>", "localhost", "127.0.0.1", "::1", "10.*", "172.16.*", "192.168.*"],
-  "disable_quic": true
+  "disable_quic": true,
+  "log_mode": "errors"
 }
 ```
 
@@ -156,7 +160,7 @@ logs\proxy-YYYYMMDD.log
 <details>
 <summary><strong>开发者：本地构建与测试</strong></summary>
 
-需要 Windows x64、Visual Studio 2022 C++ Build Tools、CMake 3.20+；运行完整向导校验还需要 Node.js 18+：
+需要 Windows x64、Visual Studio 2022 C++ Build Tools、CMake 3.20+；运行完整向导校验还需要 Node.js 18+。应用图标源文件位于 `assets/branding/codex-logo.svg`，构建使用的多尺寸 ICO 与资源清单位于 `resources/windows/`；ICO 会嵌入 EXE，不会作为独立文件进入发布包。
 
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64

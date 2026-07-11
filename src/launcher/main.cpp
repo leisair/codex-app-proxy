@@ -38,14 +38,16 @@ void OpenGuide() {
 
 int ShowError(const std::wstring& code, const std::wstring& title,
               const std::wstring& detail, int exit_code) {
+  Logger::Instance().Error(code + L" " + title + L" | " + detail);
+  const bool logging_off = Logger::Instance().Mode() == LogMode::Off;
   const std::wstring log_path = Logger::Instance().LogPath();
   const std::wstring guide = GetExecutableDir() + L"\\START-HERE.html";
   const bool has_guide = FileExists(guide);
   const std::wstring message =
       code + L"：" + title + L"\n\n" + detail +
-      L"\n\n详细日志：\n" + log_path +
+      (logging_off ? L"\n\n日志已关闭（可在 START-HERE 的高级设置中开启）。"
+                   : L"\n\n详细日志：\n" + log_path) +
       (has_guide ? L"\n\n是否打开 START-HERE 配置与排错向导？" : L"");
-  Logger::Instance().Error(code + L" " + title + L" | " + detail);
   std::wcerr << message << L"\n";
   const int answer = MessageBoxW(nullptr, message.c_str(),
                                  L"ChatGPT/Codex 代理启动器",
@@ -80,8 +82,7 @@ int StartAppWithProxy(const std::wstring& app_path, const AppConfig& config) {
   Logger::Instance().Info(L"Started app PID " + std::to_wstring(pi.dwProcessId));
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
-  std::wcout << L"ChatGPT/Codex launched with app proxy. Log: "
-             << Logger::Instance().LogPath() << L"\n";
+  std::wcout << L"ChatGPT/Codex launched with app proxy.\n";
   return 0;
 }
 
@@ -103,6 +104,8 @@ int wmain(int argc, wchar_t** argv) {
         1);
   }
 
+  Logger::Instance().SetMode(LoadLogModePreference(config_path));
+
   AppConfig config;
   if (!LoadConfig(config_path, &config, &error)) {
     return ShowError(
@@ -112,6 +115,7 @@ int wmain(int argc, wchar_t** argv) {
         L"\n\n具体问题：" + error,
         1);
   }
+  Logger::Instance().SetMode(config.log_mode);
   Logger::Instance().Info(L"Configured proxy: " + ProxyUrl(config));
 
   std::wstring app_path = args.codex_path.empty() ? FindCodexAppPath() : args.codex_path;

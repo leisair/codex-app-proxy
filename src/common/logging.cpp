@@ -38,13 +38,27 @@ Logger& Logger::Instance() {
   return logger;
 }
 
-void Logger::Init(const std::wstring& component) {
+void Logger::Init(const std::wstring& component, LogMode mode) {
   std::lock_guard<std::mutex> lock(mutex_);
   component_ = component;
-  std::wstring dir = GetExecutableDir() + L"\\logs";
-  std::error_code ec;
-  std::filesystem::create_directories(dir, ec);
-  log_path_ = dir + L"\\proxy-" + CurrentDate() + L".log";
+  mode_ = mode;
+  log_path_.clear();
+  buffered_entries_.clear();
+}
+
+void Logger::SetMode(LogMode mode) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  mode_ = mode;
+  if (mode_ == LogMode::Off) {
+    buffered_entries_.clear();
+    return;
+  }
+  if (mode_ == LogMode::Always) {
+    for (const auto& entry : buffered_entries_) {
+      AppendToFile(entry);
+    }
+    buffered_entries_.clear();
+  }
 }
 
 void Logger::Info(const std::wstring& message) {
@@ -64,20 +78,52 @@ std::wstring Logger::LogPath() const {
   return log_path_;
 }
 
-void Logger::Write(const wchar_t* level, const std::wstring& message) {
+LogMode Logger::Mode() const {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (log_path_.empty()) {
-    std::wstring dir = GetExecutableDir() + L"\\logs";
-    std::error_code ec;
-    std::filesystem::create_directories(dir, ec);
-    log_path_ = dir + L"\\proxy-" + CurrentDate() + L".log";
-  }
-  std::wofstream file(log_path_, std::ios::app);
-  if (!file) {
+  return mode_;
+}
+
+void Logger::EnsureLogPath() {
+  if (!log_path_.empty()) {
     return;
   }
-  file << CurrentTimestamp() << L" [" << level << L"] [" << component_ << L"] "
-       << message << L"\n";
+  std::wstring dir = GetExecutableDir() + L"\\logs";
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  if (!ec) {
+    log_path_ = dir + L"\\proxy-" + CurrentDate() + L".log";
+  }
+}
+
+void Logger::AppendToFile(const std::wstring& entry) {
+  EnsureLogPath();
+  if (log_path_.empty()) {
+    return;
+  }
+  std::wofstream file(log_path_, std::ios::app);
+  if (file) {
+    file << entry << L"\n";
+  }
+}
+
+void Logger::Write(const wchar_t* level, const std::wstring& message) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (mode_ == LogMode::Off) {
+    return;
+  }
+  const std::wstring entry = CurrentTimestamp() + L" [" + level + L"] [" +
+                             component_ + L"] " + message;
+  if (mode_ == LogMode::Errors && std::wstring(level) != L"error") {
+    buffered_entries_.push_back(entry);
+    return;
+  }
+  if (mode_ == LogMode::Errors) {
+    for (const auto& buffered : buffered_entries_) {
+      AppendToFile(buffered);
+    }
+    buffered_entries_.clear();
+  }
+  AppendToFile(entry);
 }
 
 std::wstring FormatLastError(const std::wstring& prefix, unsigned long error_code) {

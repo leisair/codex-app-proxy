@@ -271,8 +271,12 @@
       </section>
 
       <details id="advanced">
-        <summary>高级设置：QUIC 与本地直连列表</summary>
+        <summary>高级设置：日志、QUIC 与本地直连列表</summary>
         <div class="details-body">
+          <div class="setting-row">
+            <div><h3>诊断日志 <span class="default-mark">出厂：仅错误时记录</span></h3><p class="minor"><strong>仅错误（推荐）</strong>：正常启动不创建日志目录，出错时才写入本次启动上下文。<br><strong>始终记录</strong>：从启动开始持续写入，适合反复排错。<br><strong>关闭</strong>：完全不写日志，错误弹窗会提示日志已关闭。</p><p class="minor">日志可能包含启动器与 App 路径、代理地址和错误信息；不会记录账号、对话内容或代理流量。分享日志前仍请自行检查。</p></div>
+            <select id="logMode" aria-label="诊断日志模式"><option value="errors">仅错误（推荐）</option><option value="always">始终记录</option><option value="off">关闭</option></select>
+          </div>
           <div class="setting-row">
             <div><h3>禁用 QUIC <span class="default-mark">出厂：开启，建议保持</span></h3><p class="minor">最终添加 <code>--disable-quic</code>，让 App 优先使用可由本地 HTTP/SOCKS5 代理承载的 TCP，减少 UDP 连接绕过代理或直接失败的可能。</p></div>
             <label class="toggle" aria-label="禁用 QUIC"><input id="disableQuic" type="checkbox" checked><span></span></label>
@@ -305,7 +309,7 @@
           <h3>提示“无法连接本地代理”</h3><p class="minor">确认代理软件正在运行；再核对当前端口是否等于软件界面显示的本地/mixed 端口。</p>
           <h3 style="margin-top:16px">提示“ChatGPT/Codex 已经运行”</h3><p class="minor">从系统托盘和任务管理器完全退出桌面 App，然后重新双击启动器。终端里的 Codex CLI 不受影响。</p>
           <h3 style="margin-top:16px">配置保存后没有变化</h3><p class="minor">检查新 config.json 是否真的覆盖到了启动器旁边，而不是仍留在浏览器“下载”文件夹。</p>
-          <h3 style="margin-top:16px">仍然无法解决</h3><p class="minor">查看同目录 logs 文件夹中的最新日志。日志只记录启动路径、代理地址和错误，不记录账号或对话内容。</p>
+          <h3 style="margin-top:16px">仍然无法解决</h3><p class="minor">默认仅在启动出错时生成同目录 <code>logs</code> 文件夹。若需要完整启动轨迹，可在高级设置中临时选择“始终记录”；若已关闭日志，错误弹窗会明确提示。</p>
         </div>
       </details>
     </div>
@@ -317,12 +321,13 @@
       <dl class="summary-list">
         <div><dt>预设</dt><dd id="presetSummary">V2RayN</dd></div>
         <div><dt>QUIC</dt><dd id="quicSummary">已禁用</dd></div>
+        <div><dt>日志</dt><dd id="logSummary">仅错误</dd></div>
         <div><dt>内网直连</dt><dd id="bypassSummary">23 项</dd></div>
       </dl>
       <p id="changeNote" class="change-note">当前就是出厂配置，无需修改。</p>
       <div class="factory">
         <h3>出厂配置</h3>
-        <ul><li>HTTP / mixed</li><li>127.0.0.1:10808</li><li>禁用 QUIC：开启</li><li>本地与私网：直连</li></ul>
+        <ul><li>HTTP / mixed</li><li>127.0.0.1:10808</li><li>禁用 QUIC：开启</li><li>日志：仅错误时记录</li><li>本地与私网：直连</li></ul>
       </div>
     </aside>
   </main>
@@ -338,7 +343,7 @@
       '172.26.*', '172.27.*', '172.28.*', '172.29.*', '172.30.*',
       '172.31.*', '192.168.*'
     ];
-    const FACTORY = { type: 'http', host: '127.0.0.1', port: 10808, disableQuic: true };
+    const FACTORY = { type: 'http', host: '127.0.0.1', port: 10808, disableQuic: true, logMode: 'errors' };
     const PRESETS = {
       v2rayn: { label: 'V2RayN', type: 'http', host: '127.0.0.1', port: 10808 },
       'clash-verge': { label: 'Clash Verge Rev', type: 'http', host: '127.0.0.1', port: 7897 },
@@ -353,7 +358,8 @@
         _version: 1,
         proxy: { type: $('proxyType').value, host: $('proxyHost').value.trim(), port: Number($('proxyPort').value) },
         bypass_list: lines($('bypassList').value),
-        disable_quic: $('disableQuic').checked
+        disable_quic: $('disableQuic').checked,
+        log_mode: $('logMode').value
       };
     }
     function validate(config) {
@@ -361,6 +367,7 @@
       if (!config.proxy.host) return '代理地址不能为空。';
       if (!Number.isInteger(config.proxy.port) || config.proxy.port < 1 || config.proxy.port > 65535) return '本地监听端口必须是 1 到 65535。';
       if (!Array.isArray(config.bypass_list) || !config.bypass_list.length) return '本地与内网直连列表至少保留一项。';
+      if (config.log_mode !== undefined && !['errors', 'always', 'off'].includes(config.log_mode)) return '日志模式必须是 errors、always 或 off。';
       return '';
     }
     function commandFor(config) {
@@ -373,7 +380,7 @@
     function configText() { return JSON.stringify(currentConfig(), null, 2) + '\n'; }
     function isFactory(config) {
       return config.proxy.type === FACTORY.type && config.proxy.host === FACTORY.host && config.proxy.port === FACTORY.port &&
-        config.disable_quic === FACTORY.disableQuic && JSON.stringify(config.bypass_list) === JSON.stringify(DEFAULT_BYPASS);
+        config.disable_quic === FACTORY.disableQuic && config.log_mode === FACTORY.logMode && JSON.stringify(config.bypass_list) === JSON.stringify(DEFAULT_BYPASS);
     }
     function refresh() {
       const config = currentConfig();
@@ -384,6 +391,7 @@
       $('proxyValue').textContent = `${config.proxy.type}://${config.proxy.host || '未填写'}:${config.proxy.port || '未填写'}`;
       $('presetSummary').textContent = preset ? preset.label : '自定义';
       $('quicSummary').textContent = config.disable_quic ? '已禁用' : '允许使用';
+      $('logSummary').textContent = { errors: '仅错误', always: '始终记录', off: '关闭' }[config.log_mode];
       $('bypassSummary').textContent = `${config.bypass_list.length} 项`;
       $('health').textContent = error || '配置有效';
       $('health').className = error ? 'health bad' : 'health';
@@ -402,12 +410,13 @@
       $('proxyPort').value = config.proxy?.port || 10808;
       $('bypassList').value = (config.bypass_list || DEFAULT_BYPASS).join('\n');
       $('disableQuic').checked = config.disable_quic !== false;
+      $('logMode').value = ['errors', 'always', 'off'].includes(config.log_mode) ? config.log_mode : 'errors';
       $('preset').value = presetValue;
       $('nextSteps').classList.remove('show');
       refresh();
     }
     function factoryConfig() {
-      return { proxy: { type: FACTORY.type, host: FACTORY.host, port: FACTORY.port }, bypass_list: [...DEFAULT_BYPASS], disable_quic: FACTORY.disableQuic };
+      return { proxy: { type: FACTORY.type, host: FACTORY.host, port: FACTORY.port }, bypass_list: [...DEFAULT_BYPASS], disable_quic: FACTORY.disableQuic, log_mode: FACTORY.logMode };
     }
     function downloadableText() {
       const config = currentConfig();
@@ -443,7 +452,7 @@
       $('proxyType').value = preset.type; $('proxyHost').value = preset.host; $('proxyPort').value = preset.port; refresh();
     });
     ['proxyType', 'proxyHost', 'proxyPort'].forEach(id => $(id).addEventListener('input', () => { $('preset').value = 'custom'; refresh(); }));
-    ['bypassList', 'disableQuic'].forEach(id => $(id).addEventListener('input', refresh));
+    ['bypassList', 'disableQuic', 'logMode'].forEach(id => $(id).addEventListener('input', refresh));
     $('useFactory').addEventListener('click', () => { apply(factoryConfig(), 'v2rayn'); $('save-section').scrollIntoView({ behavior: 'smooth' }); });
     $('resetAll').addEventListener('click', () => apply(factoryConfig(), 'v2rayn'));
     $('resetBypass').addEventListener('click', () => { $('bypassList').value = DEFAULT_BYPASS.join('\n'); refresh(); });

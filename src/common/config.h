@@ -11,6 +11,12 @@ enum class ProxyType {
   Socks5,
 };
 
+enum class LogMode {
+  Errors,
+  Always,
+  Off,
+};
+
 struct ProxyConfig {
   ProxyType type = ProxyType::Http;
   std::string host = "127.0.0.1";
@@ -27,6 +33,7 @@ struct AppConfig {
       "172.25.*", "172.26.*", "172.27.*", "172.28.*", "172.29.*",
       "172.30.*", "172.31.*", "192.168.*"};
   bool disable_quic = true;
+  LogMode log_mode = LogMode::Errors;
 };
 
 AppConfig DefaultConfig();
@@ -39,5 +46,8 @@ bool SaveConfig(const std::wstring& path, const AppConfig& config, std::wstring*
 bool ValidateConfig(const AppConfig& config, std::wstring* error);
 std::string ProxyTypeToString(ProxyType type);
 ProxyType ProxyTypeFromString(const std::string& value);
+std::string LogModeToString(LogMode mode);
+LogMode LogModeFromString(const std::string& value);
+LogMode LoadLogModePreference(const std::wstring& path);
 
 }  // namespace codex_proxy

@@ -184,6 +184,42 @@ ProxyType ProxyTypeFromString(const std::string& value) {
   return lower == "socks5" ? ProxyType::Socks5 : ProxyType::Http;
 }
 
+std::string LogModeToString(LogMode mode) {
+  switch (mode) {
+    case LogMode::Always:
+      return "always";
+    case LogMode::Off:
+      return "off";
+    case LogMode::Errors:
+    default:
+      return "errors";
+  }
+}
+
+LogMode LogModeFromString(const std::string& value) {
+  const std::string lower = ToLower(Trim(value));
+  if (lower == "always") {
+    return LogMode::Always;
+  }
+  if (lower == "off") {
+    return LogMode::Off;
+  }
+  return LogMode::Errors;
+}
+
+LogMode LoadLogModePreference(const std::wstring& path) {
+  const std::string json = ReadFileUtf8(path);
+  std::string value;
+  if (!ExtractString(json, "log_mode", &value)) {
+    return LogMode::Errors;
+  }
+  const std::string lower = ToLower(Trim(value));
+  if (lower != "errors" && lower != "always" && lower != "off") {
+    return LogMode::Errors;
+  }
+  return LogModeFromString(lower);
+}
+
 std::string SerializeConfig(const AppConfig& config) {
   std::ostringstream out;
   out << "{\n";
@@ -202,7 +238,8 @@ std::string SerializeConfig(const AppConfig& config) {
     out << "\"" << JsonEscape(config.bypass_list[i]) << "\"";
   }
   out << "],\n";
-  out << "  \"disable_quic\": " << (config.disable_quic ? "true" : "false") << "\n";
+  out << "  \"disable_quic\": " << (config.disable_quic ? "true" : "false") << ",\n";
+  out << "  \"log_mode\": \"" << LogModeToString(config.log_mode) << "\"\n";
   out << "}\n";
   return out.str();
 }
@@ -319,6 +356,23 @@ bool LoadConfig(const std::wstring& path, AppConfig* config, std::wstring* error
     return false;
   }
   parsed.disable_quic = bool_value;
+
+  const bool has_log_mode = std::regex_search(json, std::regex("\"log_mode\"\\s*:"));
+  if (ExtractString(json, "log_mode", &value)) {
+    const std::string log_mode = ToLower(Trim(value));
+    if (log_mode != "errors" && log_mode != "always" && log_mode != "off") {
+      if (error) {
+        *error = L"log_mode（日志模式）只能是 errors、always 或 off";
+      }
+      return false;
+    }
+    parsed.log_mode = LogModeFromString(log_mode);
+  } else if (has_log_mode) {
+    if (error) {
+      *error = L"log_mode（日志模式）只能是字符串 errors、always 或 off";
+    }
+    return false;
+  }
 
   if (!ValidateConfig(parsed, error)) {
     return false;
