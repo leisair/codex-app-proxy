@@ -1,4 +1,4 @@
-# ChatGPT/Codex Proxy Launcher
+# ChatGPT/Codex App Proxy Launcher
 
 [![Windows Build](https://github.com/leisair/codex-app-proxy/actions/workflows/windows-build.yml/badge.svg)](https://github.com/leisair/codex-app-proxy/actions/workflows/windows-build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/leisair/codex-app-proxy?label=latest)](https://github.com/leisair/codex-app-proxy/releases/latest)
@@ -6,7 +6,7 @@
 
 让 Microsoft Store 版 ChatGPT/Codex **只使用你指定的本地代理**，无需开启 Windows 系统代理、TUN 模式或额外后台服务。
 
-*A portable Windows launcher that starts the Microsoft Store ChatGPT/Codex app with a per-app proxy.*
+*A portable Windows launcher for the Microsoft Store ChatGPT/Codex desktop app. It applies a per-app HTTP/SOCKS5 proxy without changing the Windows system proxy, enabling TUN, or running a background service.*
 
 > [下载最新版](https://github.com/leisair/codex-app-proxy/releases/latest) · [版本记录](CHANGELOG.md) · 下载 `windows-x64.zip`，解压后打开 `START-HERE.html`
 
@@ -31,6 +31,10 @@
 3. 启动代理软件，完全退出已有 ChatGPT/Codex，然后双击 `CodexProxyLauncher.exe`。
 
 不需要开启系统代理，不需要开启 TUN。
+
+## English summary
+
+This project is a Windows x64 **ChatGPT/Codex desktop app proxy launcher** for the Microsoft Store app. It starts the app with Chromium per-app proxy flags, supports local HTTP/mixed and SOCKS5 listeners, and leaves Windows system proxy settings unchanged. It is a portable utility, not a VPN, proxy provider, subscription manager, or background service.
 
 ## 它实际做什么
 
@@ -178,6 +182,8 @@ ctest --test-dir build -C Release --output-on-failure
 </details>
 
 ## 支持与反馈
+
+发现可复现问题请使用 [Issue 模板](https://github.com/leisair/codex-app-proxy/issues/new/choose)；安全漏洞请阅读 [SECURITY.md](SECURITY.md)，不要公开粘贴敏感信息。开发者可参考 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 提交 Issue 时请附上：
 

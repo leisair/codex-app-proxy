@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 下载最新版本
+    url: https://github.com/leisair/codex-app-proxy/releases/latest
+    about: 请先使用最新 Release 和 START-HERE.html 配置向导。
+  - name: 安全漏洞报告
+    url: https://github.com/leisair/codex-app-proxy/security/advisories/new
+    about: 请使用私密 Security Advisory，不要公开发布敏感信息。

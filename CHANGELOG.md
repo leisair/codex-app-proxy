@@ -2,6 +2,18 @@
 
 本项目的用户可见变更记录在此文件中。版本遵循语义化版本号。
 
+## [1.1.2] - 2026-07-12
+
+### Changed
+
+- 产品名称统一为 ChatGPT/Codex App Proxy Launcher，仓库 slug 保持 `codex-app-proxy`。
+- README 增加中英文搜索描述，明确 Microsoft Store、Windows x64、HTTP/SOCKS5 和 per-app proxy 关键词。
+
+### Added
+
+- 新增 `CONTRIBUTING.md`、`SECURITY.md` 和 GitHub Issue 模板。
+- 保留并核实仓库 About 描述与现有 Topics 配置。
+
 ## [1.1.1] - 2026-07-11
 
 ### Changed
@@ -33,6 +45,7 @@
 - 便携式 Windows x64 启动器，通过 Chromium 启动参数为 Microsoft Store 版 ChatGPT/Codex 设置单应用代理。
 - 单文件离线配置向导、常用代理预设、环境检查、错误提示和自动化发布流程。
 
+[1.1.2]: https://github.com/leisair/codex-app-proxy/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/leisair/codex-app-proxy/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/leisair/codex-app-proxy/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/leisair/codex-app-proxy/releases/tag/v1.0.0

@@ -1,0 +1,42 @@
+name: Bug report
+description: 报告可复现的启动器、配置或发布包问题
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请不要提交账号、订阅内容、访问令牌或未经检查的完整日志。
+  - type: input
+    id: version
+    attributes:
+      label: Launcher version
+      description: 例如 v1.1.1
+      placeholder: v1.1.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2 x64
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: 请列出代理软件、代理类型/端口和启动步骤，不要包含节点或订阅信息。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized error details
+      description: 仅粘贴脱敏后的错误码和相关几行。

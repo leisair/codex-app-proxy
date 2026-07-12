@@ -1,0 +1,26 @@
+name: Feature request
+description: 提议与单应用代理启动器定位一致的改进
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: 你遇到的具体使用场景是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: 你希望启动器或离线向导如何改变？
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Project scope
+      options:
+        - label: 该建议不要求修改 Windows 系统代理、创建 TUN 或常驻后台服务。
+          required: true
