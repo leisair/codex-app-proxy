@@ -27,6 +27,10 @@ jobs:
         shell: pwsh
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 
+      - name: Verify source icon
+        shell: pwsh
+        run: .\tests\verify-icon.ps1 resources\windows\codex-proxy.ico
+
       - name: Build
         shell: pwsh
         run: cmake --build build --config Release
@@ -85,7 +89,12 @@ jobs:
           if (-not (Test-Path -LiteralPath $notes)) {
             throw "Missing version-specific release notes: $notes"
           }
-          gh release create $version "dist/$base.zip" "dist/$base.sha256" `
-            --title "$version" `
-            --notes-file $notes `
-            --verify-tag
+          gh release view $version *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $version "dist/$base.zip" "dist/$base.sha256" --clobber
+          } else {
+            gh release create $version "dist/$base.zip" "dist/$base.sha256" `
+              --title "$version" `
+              --notes-file $notes `
+              --verify-tag
+          }
