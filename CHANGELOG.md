@@ -2,6 +2,13 @@
 
 本项目的用户可见变更记录在此文件中。版本遵循语义化版本号。
 
+## [1.1.3] - 2026-07-14
+
+### Changed
+
+- 使用新的 Codex logo 替换启动器图标源文件。
+- 重新生成多尺寸 Windows ICO，并嵌入启动器 EXE。
+
 ## [1.1.2] - 2026-07-12
 
 ### Changed
@@ -45,6 +52,7 @@
 - 便携式 Windows x64 启动器，通过 Chromium 启动参数为 Microsoft Store 版 ChatGPT/Codex 设置单应用代理。
 - 单文件离线配置向导、常用代理预设、环境检查、错误提示和自动化发布流程。
 
+[1.1.3]: https://github.com/leisair/codex-app-proxy/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/leisair/codex-app-proxy/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/leisair/codex-app-proxy/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/leisair/codex-app-proxy/compare/v1.0.0...v1.1.0
