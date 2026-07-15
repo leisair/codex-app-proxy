@@ -48,6 +48,10 @@ int main() {
          std::wstring::npos);
   assert(command.find(L"--proxy-bypass-list=") != std::wstring::npos);
   assert(command.find(L"--disable-quic") != std::wstring::npos);
+  std::wstring arguments = BuildAppArguments(config);
+  assert(arguments.find(L"C:\\Program Files\\ChatGPT.exe") == std::wstring::npos);
+  assert(arguments.find(L"--proxy-server=\"http://127.0.0.1:10808\"") !=
+         std::wstring::npos);
 
   AppConfig socks = config;
   socks.proxy.type = ProxyType::Socks5;

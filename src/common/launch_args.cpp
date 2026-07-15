@@ -24,10 +24,8 @@ std::wstring ProxyUrl(const AppConfig& config) {
          std::to_wstring(config.proxy.port);
 }
 
-std::wstring BuildAppCommandLine(const std::wstring& app_path,
-                                 const AppConfig& config) {
-  std::wstring command = L"\"" + app_path + L"\" --proxy-server=\"" +
-                         ProxyUrl(config) + L"\"";
+std::wstring BuildAppArguments(const AppConfig& config) {
+  std::wstring command = L"--proxy-server=\"" + ProxyUrl(config) + L"\"";
 
   const std::wstring bypass = JoinBypassList(config.bypass_list);
   if (!bypass.empty()) {
@@ -37,6 +35,11 @@ std::wstring BuildAppCommandLine(const std::wstring& app_path,
     command += L" --disable-quic";
   }
   return command;
+}
+
+std::wstring BuildAppCommandLine(const std::wstring& app_path,
+                                 const AppConfig& config) {
+  return L"\"" + app_path + L"\" " + BuildAppArguments(config);
 }
 
 }  // namespace codex_proxy

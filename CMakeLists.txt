@@ -31,7 +31,7 @@ add_executable(CodexProxyLauncher
   src/launcher/main.cpp
   resources/windows/launcher.rc
 )
-target_link_libraries(CodexProxyLauncher PRIVATE codex_proxy_common shell32 user32)
+target_link_libraries(CodexProxyLauncher PRIVATE codex_proxy_common ole32 shell32 user32)
 
 if(CODEX_PROXY_BUILD_TESTS)
   enable_testing()

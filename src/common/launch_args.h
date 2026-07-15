@@ -7,6 +7,7 @@
 namespace codex_proxy {
 
 std::wstring ProxyUrl(const AppConfig& config);
+std::wstring BuildAppArguments(const AppConfig& config);
 std::wstring BuildAppCommandLine(const std::wstring& app_path,
                                  const AppConfig& config);
 
